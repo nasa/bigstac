@@ -3,4 +3,6 @@ include
 lib
 share
 *.json
+*.jsonl
 *.parquet
+.ipynb_checkpoints/
