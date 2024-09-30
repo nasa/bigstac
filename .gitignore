@@ -6,3 +6,5 @@ share
 *.jsonl
 *.parquet
 .ipynb_checkpoints/
+.DS_Store
+data/
