@@ -8,4 +8,11 @@ share
 *.parquet
 .ipynb_checkpoints/
 .DS_Store
-data/
+.vscode
+
+# any and all directories beginning with "data" assumed to hold test data/harvester output
+**/data*
+
+#  env files
+**/.env
+**/.env.*
