@@ -2,7 +2,8 @@ bin
 include
 lib
 share
-*.json
+*.log
+#*.json
 *.jsonl
 *.parquet
 .ipynb_checkpoints/

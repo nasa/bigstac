@@ -1,0 +1,95 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://cmr.easdis.nasa.gov/big-stack-tests.schema.json",
+    "title": "BigStacTestCases",
+    "description": "A set of tests to run against BigStack Code",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "name": {"type": "string", "description": "test suit name"},
+        "description": {"type": "string", "description": "short description of the test suit"},
+        "inputs": {
+            "type": "array",
+            "description": "A list of required parameters",
+            "items": {"$ref": "#/definitions/InputType"}
+        },
+        "tests": {
+            "type": "array",
+            "description": "test suit name",
+            "items": {"$ref": "#/definitions/TestType"}
+        }
+    },
+    "required": ["name", "description", "tests"],
+    "definitions":
+    {
+
+        "InputType": {
+            "type": "string",
+            "description": "the name of a value that will show up in values later"
+        },
+
+        "TestType": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "a short description on the test."
+                },
+                "operations": {
+                    "type": "array",
+                    "description": "",
+                    "items": {"$ref": "#/definitions/OperationType"},
+                    "minItems": 1
+                },
+                "sort-by": {"type": "string", "description": "how the results should be sorted."},
+                "source": {
+                    "type": "string",
+                    "description": "where to pull the data from, could be a local path or an s3 bucket"}
+            },
+            "required": ["operations", "source"]
+        },
+
+        "OperationType": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "and": {
+                    "type": "array",
+                    "description": "",
+                    "items": {"$ref": "#/definitions/OpType"}
+                },
+                "or": {
+                    "type": "array",
+                    "description": "not currently supported",
+                    "items": {"$ref": "#/definitions/OpType"}
+                },
+                "not": {
+                    "type": "array",
+                    "description": "not currently supported",
+                    "items": {"$ref": "#/definitions/OpType"}
+                }
+            },
+            "anyOf": [{"required": ["and"]}, {"required": ["or"]}, {"required": ["not"]}]
+        },
+
+        "OpType": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "describe the intent of the search"},
+                "type": {
+                    "type": "string",
+                    "description": "geometry, parameter, time?",
+                    "enum": ["geometry", "time", "parameter"]},
+                "option": {
+                    "type": "string",
+                    "description": "configuration value specific to the type"},
+                "value": {"type": "string"}
+            },
+            "required": ["type", "value"]
+        }
+    }
+}

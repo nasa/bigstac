@@ -1,0 +1,30 @@
+{
+    "name": "Primary tests",
+    "description": "A basic set of tests modled after: SELECT granule, geometry FROM parquet_scan('data/{provider}/{short_name}/all.parquet') WHERE st_intersects(geometry::geometry, '{user_search}'::GEOMETRY) ORDER BY granule",
+    "inputs": ["provider", "short_name"],
+    "tests": [
+        {
+            "description": "conduct an intersecting box and time based search which is then sorted",
+            "operations": [
+                {
+                    "and": [
+                        {
+                            "description": "does a box interset and find records",
+                            "type": "geometry",
+                            "option": "intersect",
+                            "value": "POLYGON((-110.60867891721024 53.37487808881224, -110.60867891721024 53.29764645852637, -109.73806661064765 53.29764645852637, -109.73806661064765 53.37487808881224, -110.60867891721024 53.37487808881224))"
+                        },
+                        {
+                            "description": "are their records that come after a fixed date",
+                            "type": "time",
+                            "option": "greater-then",
+                            "value": "2017-06-29T16:21"
+                        }
+                    ]
+                }
+            ],
+            "sort-by": "granule",
+            "source": "{provider}/{short_name}/all.parquet"
+        }
+    ]
+}
