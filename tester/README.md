@@ -19,6 +19,12 @@ To write a test, create a file that conforms to the schema.json file. Implimenta
 | value       | Yes      | POLYGON((... | data to search with, ex: geometry: a Polygon
 | description |          | anything     | optional note on the test
 
+### JSON Schema
+
+jv was used to validate the schema, this can be found at:
+
+    go install github.com/santhosh-tekuri/jsonschema/cmd/jv@latest
+
 ## Testing cases
 
 * Top level Parquet (metadata) Field 'Bounds' filtering

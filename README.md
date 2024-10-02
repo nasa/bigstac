@@ -13,5 +13,7 @@ An exploration on storing granule information as flat files on an S3 bucket and 
   * https://github.com/cholmes/duckdb-geoparquet-tutorials
 * API documentation
   * https://arrow.apache.org/docs/python/index.html
- 
-## Hello world
+
+## Testing
+A testing application exists at [tester](tester). This application will perform a set of queries
+against a proposed setup. Initially this will be duckdb.
