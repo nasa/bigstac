@@ -2,6 +2,8 @@
 Abstract interface for a Target System to be tested such as DuckDB
 '''
 
+from util import test_config
+
 # pylint: disable=W0107
 class TargetSystem:
     ''' Interface to represent actions that can be taken against a target system to test. '''
@@ -17,7 +19,7 @@ class TargetSystem:
         ''' Store the configuration to be used latter. '''
         self.data = data
 
-    def generate_tests(self):
+    def generate_tests(self) -> (str, test_config.AssessConfig):
         ''' Generator to produce tests specific to the system. Will call yield. '''
         pass
 

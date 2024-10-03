@@ -8,9 +8,12 @@ import time
 import threading
 
 thread_info = {} # mapping of thread ids to thread counts starting at 0
-log = logging.getLogger(__name__)
+log = None
 
-logging.basicConfig(filename=f"{os.path.basename(__file__)}.log", level=logging.INFO)
+def init_logging(file_name):
+    global log
+    logging.basicConfig(filename=f"{os.path.basename(file_name)}.log", level=logging.INFO)
+    log = logging.getLogger(os.path.basename(file_name))
 
 def error(msg):
     ''' Print out an error message. '''
@@ -38,9 +41,10 @@ def log_time(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         mark_start = int(time.time() * 1000)
-        func(*args, **kwargs)
+        rtn = func(*args, **kwargs)
         mark_stop = int(time.time() * 1000)
         #log.info(f"{func.__name__}: {mark_stop - mark_start}")
         log.info('%s: %s', func.__name__, mark_stop - mark_start)
         #print(f"{func.__name__}: {mark_stop - mark_start}")
+        return rtn
     return wrapper

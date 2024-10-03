@@ -25,13 +25,19 @@
 
         "InputType": {
             "type": "string",
-            "description": "the name of a value that will show up in values later"
+            "description": "the name of a value that will show up in values later - this might be dropped"
         },
 
         "TestType": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "a required, short name for the test which will be printed in the report",
+                    "minLength": 1,
+                    "maxLength": 128
+                },
                 "description": {
                     "type": "string",
                     "description": "a short description on the test."
@@ -42,12 +48,31 @@
                     "items": {"$ref": "#/definitions/OperationType"},
                     "minItems": 1
                 },
-                "sortby": {"type": "string", "description": "how the results should be sorted."},
+                "sortby": {
+                    "type": "string",
+                    "description": "how the results should be sorted."
+                },
                 "source": {
                     "type": "string",
-                    "description": "where to pull the data from, could be a local path or an s3 bucket"}
+                    "description": "where to pull the data from, could be a local path or an s3 bucket",
+                    "default": "**/*.parquet"
+                },
+                "expected": {
+                    "type": "object",
+                    "description": "A post search test to perform",
+                    "properties": {
+                        "action": {
+                            "description": "Calculation to perform after search has been completed against the response.",
+                            "enum": ["count", "greater-then", "less-then", "exact", "contain"]
+                        },
+                        "value": {
+                            "description": "Value to compair against when using the test indicated by action. Type is specific to the action.",
+                            "type": ["string", "number"]
+                        }
+                    }
+                }
             },
-            "required": ["operations", "source"]
+            "required": ["name", "operations"]
         },
 
         "OperationType": {
@@ -56,7 +81,7 @@
             "properties": {
                 "ands": {
                     "type": "array",
-                    "description": "",
+                    "description": "A list of search criteria to be AND together.",
                     "items": {"$ref": "#/definitions/OpType"},
                     "minItems": 1
                 },

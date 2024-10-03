@@ -1,6 +1,8 @@
 ''' Impliment the TargetSystem interface and support duckdb as a target testing system. '''
 
 from util import target_system as tar_sys
+from util import test_config
+#import util
 
 import duckdb
 
@@ -14,10 +16,10 @@ import duckdb
 class DuckDbSystem(tar_sys.TargetSystem):
     ''' Base system '''
 
-    def generate_tests(self):
+    def generate_tests(self) -> (str, test_config.AssessType):
         ''' Generator to produce tests specific to the system. Will call yield. '''
         for test in self.data.tests:
-            src = '{data}/' + test.source
+            src = test.source if test.source else '{data}/**/all.parquet'
             where_list = []
             for op in test.operations:
                 for step in op.ands:
@@ -31,7 +33,7 @@ class DuckDbSystem(tar_sys.TargetSystem):
             if test.sortby:
                 sort_stm = f"ORDER by {test.sortby}"
             sql = f"-- {test.description}\nSELECT *\nFROM '{src}'\nWHERE {where_stm}\n{sort_stm}"
-            yield sql
+            yield sql, test
 
     def generate_geometry(self, step) -> str:
         ''' Generate a Geometry statment for the where close '''
@@ -61,9 +63,9 @@ class DuckDbSystem(tar_sys.TargetSystem):
 
         stm = f"\n\t-- {step.description}\n"
         if step.option == 'greater-then':
-            stm += f"\tdatetime <= '{step.value}'"
-        elif step.option == 'less-then':
             stm += f"\tdatetime >= '{step.value}'"
+        elif step.option == 'less-then':
+            stm += f"\tdatetime <= '{step.value}'"
         elif step.option == 'range':
             parts = step.value.split('/')
             stm += '\t('
@@ -76,5 +78,5 @@ class DuckDbSystem(tar_sys.TargetSystem):
             stm += ')'
         return stm
 
-    def run_test(self, code:str) -> str:
-        return duckdb.sql(code)
+    def run_test(self, code:str) -> list:
+        return duckdb.sql(code).fetchall()

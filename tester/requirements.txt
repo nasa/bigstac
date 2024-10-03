@@ -1,5 +1,5 @@
 duckdb    # then entire point of this project
-ppyaml    # used to read in config files
+pyyaml    # used to read in config files
 pyarrow   # ?
 pydantic  # file to object mapping (config files)
 shapely   # ?

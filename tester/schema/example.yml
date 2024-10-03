@@ -23,4 +23,7 @@ tests:
             option: greater-then
             value: '2017-06-29T16:21'
     sortby: granule
-    source: '{provider}/{short_name}/all.parquet'
+    source: '{data}/**/all.parquet'
+    expected:
+      -action: count
+      -value: 11208

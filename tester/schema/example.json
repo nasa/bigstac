@@ -1,9 +1,10 @@
 {
     "name": "Primary tests",
     "description": "A basic set of tests modled after: SELECT granule, geometry FROM parquet_scan('data/{provider}/{short_name}/all.parquet') WHERE st_intersects(geometry::geometry, '{user_search}'::GEOMETRY) ORDER BY granule",
-    "inputs": ["provider", "short_name"],
+    "inputs": ["data"],
     "tests": [
         {
+            "name": "test1",
             "description": "conduct an intersecting box and time based search which is then sorted",
             "operations": [
                 {
@@ -24,7 +25,8 @@
                 }
             ],
             "sortby": "granule",
-            "source": "{provider}/{short_name}/all.parquet"
+            "source": "{data}/**/all.parquet",
+            "expected": {"action": "count", "value": 11208}
         }
     ]
 }

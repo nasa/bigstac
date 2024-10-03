@@ -35,7 +35,11 @@ class OperationType(BaseModel):
             raise ValueError("At least one of 'and_op' or 'or_op' must be provided")
         return self
 
-class TestType(BaseModel):
+class ExpectedType(BaseModel):
+    action: Literal["count", "more-then", "less-then", "exact", "contain"]
+    value: str | int
+
+class AssessType(BaseModel):
     ''' A single test to perform. '''
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
     name: str = None
@@ -43,28 +47,28 @@ class TestType(BaseModel):
     columns: list[str] = ['*']
     operations: list[OperationType]
     sortby: str = None
-    source: str = '*.parquet'
-    expected: str = None
+    source: str = '**/*.parquet'
+    expected: ExpectedType = None
 
-class TestConfig(BaseModel):
+class AssessConfig(BaseModel):
     ''' The entire test suite. '''
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
     description: str = None
     name: str = None
     inputs: list[str] = None
-    tests: list[TestType]
+    tests: list[AssessType]
 
 # ################################################################################################ #
 
-def from_json(raw_data:str) -> TestConfig:
+def from_json(raw_data:str) -> AssessConfig:
     ''' Public method to take a raw json string and return a TestConfig object '''
     data = json.loads(raw_data)
-    return TestConfig(**data)
+    return AssessConfig(**data)
 
-def from_yaml(raw_yaml:str) -> TestConfig:
+def from_yaml(raw_yaml:str) -> AssessConfig:
     ''' Public method to take a raw yaml string and return a TestConfig object '''
     data = yaml.safe_load(raw_yaml)
-    return TestConfig(**data)
+    return AssessConfig(**data)
 
 # ################################################################################################ #
 
@@ -85,10 +89,11 @@ unit_test_data_json = {
                         }
                     ]
                 }
-            ]
+            ],
+            'expected': {'action': 'count', 'value': 46151}
         }
     ]
 }
 
-unit_test_data_pydamic = TestConfig(**unit_test_data_json)
+unit_test_data_pydamic = AssessConfig(**unit_test_data_json)
 assert unit_test_data_pydamic.tests[0].operations[0].ands[0].type_of == 'geometry'
