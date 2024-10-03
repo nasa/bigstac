@@ -1,24 +1,35 @@
 #!/usr/bin/env python3
 
-import argparse
-import json
-import os
+'''
+Perform a set of tests against a parquet database like duckdb
+'''
 
-import util
+import argparse
+import sys
+
+from util import test_config as tconfig
+from util import output
 
 from target_duckdb import engine as duck
 
+# ################################################################################################ #
+# Mark: - Functions
+
 def parse_config(path:str)->dict:
-    config = {}
-    with open(path, 'r') as file:
-        config = json.load(file)
+    ''' Parse a json file and convert it to a TestConfig object '''
+    config = None
+    with open(path, 'r', encoding='utf-8') as file:
+        #config = json.load(file)
+        config = file.read()
+        return tconfig.from_json(config)
     return config
 
 def run(args):
+    ''' Handle the script tasks '''
     # 1. Parse configuration
     if args.config is None:
         output.error("No configuration file provided")
-        os.exit(1)
+        sys.exit(1)
     config = parse_config(args.config)
 
     # 2. select test target engine
@@ -33,16 +44,17 @@ def run(args):
         test = test.replace('{provider}', 'NSIDC_ECS')
         test = test.replace('{short_name}', 'ABLVIS1B_1')
         print (test)
-        #engine.run_test(test)
+        out = engine.run_test(test)
+        print(out)
 
     # 4. start test engine
     # 5. generate report
 
-    pass
-
 # ################################################################################################ #
+# Mark: - Command functions
 
 def handle_args() -> argparse.Namespace:
+    ''' Process all the command line arguments and return an argparse Namespace object. '''
     parser = argparse.ArgumentParser(description="Description of your script")
 
     # Add command-line arguments
@@ -56,6 +68,7 @@ def handle_args() -> argparse.Namespace:
     return args
 
 def main():
+    ''' Be a command line app. '''
     args = handle_args()
     run(args)
 

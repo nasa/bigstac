@@ -1,68 +1,54 @@
+''' Impliment the TargetSystem interface and support duckdb as a target testing system. '''
 
-from util import TargetSystem
+from util import target_system as tar_sys
 
 import duckdb
 
-'''
-SELECT
-  geometry as geometry_duckdb,
-  ST_AsWKB(geometry) as geometry_standard
-FROM parquet_scan('{out_parquet_path}')
-WHERE st_contains(geometry::geometry, 'POINT(-83.0123 40)'::GEOMETRY)
-LIMIT 1
+# SELECT
+#  geometry as geometry_duckdb,
+#  ST_AsWKB(geometry) as geometry_standard
+# FROM parquet_scan('{out_parquet_path}')
+# WHERE st_contains(geometry::geometry, 'POINT(-83.0123 40)'::GEOMETRY)
+# LIMIT 1
 
-'''
-
-class DuckDbSystem(TargetSystem.TargetSystem):
+class DuckDbSystem(tar_sys.TargetSystem):
     ''' Base system '''
 
     def generate_tests(self):
-        """Generator to produce tests specific to the system. Will call yield"""
-
-        name = self.data.get('name', "unknown")
-        desc = self.data.get('description', 'none')
-        inputs = self.data.get('inputs', [])
-        tests = self.data.get('tests', [])
-
-        for test in tests:
-            desc = test.get('description', 'No description')
-            ops = test.get('operations', [])
-            sort = test.get('sort-by', '')
-            src = '{data}/' + test.get('source', '*.parquet')
+        ''' Generator to produce tests specific to the system. Will call yield. '''
+        for test in self.data.tests:
+            src = '{data}/' + test.source
             where_list = []
-            for op in ops:
-                and_op = op.get('and', [])
-                for step in and_op:
-                    op_desc = step.get('description', 'No description')
-                    op_type = step.get('type', 'Unknown')
-                    op_option = step.get('option', None)
-                    op_value = step.get('value', '')
-                    if op_type == 'geometry':
-                        where_list.append(self.generate_geometry(op_desc, op_type, op_option, op_value))
-                    elif op_type == 'time':
-                        where_list.append(self.generate_time(op_desc, op_type, op_option, op_value))
+            for op in test.operations:
+                for step in op.ands:
+                    if step.type_of == 'geometry':
+                        where_list.append(self.generate_geometry(step))
+                    elif step.type_of == 'time':
+                        where_list.append(self.generate_time(step))
 
             where_stm = '\tAND'.join(where_list)
             sort_stm = ''
-            if sort:
-                sort_stm = f"ORDER by {sort}"
-            sql = f"-- {desc}\nSELECT *\nFROM '{src}'\nWHERE {where_stm}\n{sort_stm}"
+            if test.sortby:
+                sort_stm = f"ORDER by {test.sortby}"
+            sql = f"-- {test.description}\nSELECT *\nFROM '{src}'\nWHERE {where_stm}\n{sort_stm}"
             yield sql
 
-    def generate_geometry(self, op_desc, op_type, op_option, op_value) -> str:
+    def generate_geometry(self, step) -> str:
+        ''' Generate a Geometry statment for the where close '''
         # intersects = st_intersects
         # contains = st_contains
-        partial_statment = f"\n\t-- {op_desc}\n"
-        if op_option == 'intersects':
-            partial_statment += f"\tst_intersects(geometry::geometry, '{op_value}'::GEOMETRY)\n"
-        elif op_option == 'contains':
-            partial_statment += f"\tst_contains(geometry::geometry, '{op_value}'::GEOMETRY)\n"
+        partial_statment = f"\n\t-- {step.description}\n"
+        if step.option == 'intersects':
+            partial_statment += f"\tst_intersects(geometry::geometry, '{step.value}'::GEOMETRY)\n"
+        elif step.option == 'contains':
+            partial_statment += f"\tst_contains(geometry::geometry, '{step.value}'::GEOMETRY)\n"
         else:
-            partial_statment += f"\n-- {op_option} is known\n"
+            partial_statment += f"\n-- {step.option} is known\n"
 
         return partial_statment
 
-    def generate_time(self, op_desc, op_type, op_option, op_value) -> str:
+    def generate_time(self, step) -> str:
+        ''' Generate a Time statment for the where close '''
         # datetime
         # end_datetime
         # start_datetime
@@ -73,22 +59,22 @@ class DuckDbSystem(TargetSystem.TargetSystem):
         #op_value = "2018-02-01/"
         #op_value = "/2018-02-01"
 
-        stm = f"\n\t-- {op_desc}\n"
-        if op_option == 'greater-then':
-            stm += f"\tdatetime <= {op_value}"
-        elif op_option == 'less-then':
-            stm += f"\tdatetime >= {op_value}"
-        elif op_option == 'range':
-            parts = op_value.split('/')
+        stm = f"\n\t-- {step.description}\n"
+        if step.option == 'greater-then':
+            stm += f"\tdatetime <= '{step.value}'"
+        elif step.option == 'less-then':
+            stm += f"\tdatetime >= '{step.value}'"
+        elif step.option == 'range':
+            parts = step.value.split('/')
             stm += '\t('
             if parts[0]:
-                stm += f"start_datetime <= {parts[0]}"
+                stm += f"start_datetime <= '{parts[0]}'"
             if parts[0] and len(parts)==2 and parts[1]:
                 stm += ' AND '
             if len(parts)==2 and parts[1]:
-                stm += f"{parts[1]} <= stop_datetime"
+                stm += f"'{parts[1]}' <= stop_datetime"
             stm += ')'
         return stm
 
-    def run_test(self, sql:str) -> str:
-        return duckdb.sql(sql)
+    def run_test(self, code:str) -> str:
+        return duckdb.sql(code)

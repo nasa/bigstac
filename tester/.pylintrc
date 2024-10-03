@@ -1,0 +1,3 @@
+[pylint]
+disable=W0718,R0801
+ignore-patterns=lib|bin|.pylintrc

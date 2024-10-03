@@ -7,23 +7,23 @@
             "description": "conduct an intersecting box and time based search which is then sorted",
             "operations": [
                 {
-                    "and": [
+                    "ands": [
                         {
                             "description": "does a box interset and find records",
-                            "type": "geometry",
+                            "type_of": "geometry",
                             "option": "intersects",
                             "value": "POLYGON((-110.60867891721024 53.37487808881224, -110.60867891721024 53.29764645852637, -109.73806661064765 53.29764645852637, -109.73806661064765 53.37487808881224, -110.60867891721024 53.37487808881224))"
                         },
                         {
                             "description": "are their records that come after a fixed date",
-                            "type": "time",
+                            "type_of": "time",
                             "option": "greater-then",
                             "value": "2017-06-29T16:21"
                         }
                     ]
                 }
             ],
-            "sort-by": "granule",
+            "sortby": "granule",
             "source": "{provider}/{short_name}/all.parquet"
         }
     ]

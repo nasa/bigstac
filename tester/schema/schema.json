@@ -42,7 +42,7 @@
                     "items": {"$ref": "#/definitions/OperationType"},
                     "minItems": 1
                 },
-                "sort-by": {"type": "string", "description": "how the results should be sorted."},
+                "sortby": {"type": "string", "description": "how the results should be sorted."},
                 "source": {
                     "type": "string",
                     "description": "where to pull the data from, could be a local path or an s3 bucket"}
@@ -54,23 +54,25 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-                "and": {
+                "ands": {
                     "type": "array",
                     "description": "",
-                    "items": {"$ref": "#/definitions/OpType"}
+                    "items": {"$ref": "#/definitions/OpType"},
+                    "minItems": 1
                 },
-                "or": {
+                "ors": {
                     "type": "array",
                     "description": "not currently supported",
-                    "items": {"$ref": "#/definitions/OpType"}
+                    "items": {"$ref": "#/definitions/OpType"},
+                    "minItems": 1
                 },
-                "not": {
-                    "type": "array",
+                "nots": {
+                    "type": "object",
                     "description": "not currently supported",
-                    "items": {"$ref": "#/definitions/OpType"}
+                    "$ref": "#/definitions/OpType"
                 }
             },
-            "anyOf": [{"required": ["and"]}, {"required": ["or"]}, {"required": ["not"]}]
+            "anyOf": [{"required": ["ands"]}, {"required": ["ors"]}, {"required": ["nots"]}]
         },
 
         "OpType": {
@@ -80,16 +82,18 @@
                 "description": {
                     "type": "string",
                     "description": "describe the intent of the search"},
-                "type": {
+                "type_of": {
                     "type": "string",
                     "description": "geometry, parameter, time?",
                     "enum": ["geometry", "time", "parameter"]},
                 "option": {
                     "type": "string",
                     "description": "configuration value specific to the type"},
-                "value": {"type": "string"}
+                "value": {
+                    "type": "string",
+                    "description": "the item to search for"}
             },
-            "required": ["type", "value"]
+            "required": ["type_of", "value"]
         }
     }
 }

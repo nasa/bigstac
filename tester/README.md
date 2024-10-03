@@ -19,13 +19,19 @@ To write a test, create a file that conforms to the schema.json file. Implimenta
 | value       | Yes      | POLYGON((... | data to search with, ex: geometry: a Polygon
 | description |          | anything     | optional note on the test
 
-### JSON Schema
-
-jv was used to validate the schema, this can be found at:
-
-    go install github.com/santhosh-tekuri/jsonschema/cmd/jv@latest
-
 ## Testing cases
+
+* query
+	* all records (no input?)
+	* spatial only
+	* temporal only
+	* field only
+	* spatial & temporal
+	* spatial & field
+	* temporal & field
+	* spatial, temporal, & field
+
+Input choices:
 
 * Top level Parquet (metadata) Field 'Bounds' filtering
 * Top level Parquet (metadata) datetime Fields filtering
@@ -36,22 +42,14 @@ jv was used to validate the schema, this can be found at:
 	* size
 * Parquet row count
 * Parquet Row Group size
+* Parquet grouping
+	* by location
+	* by time
 * wild cards in paths
 	* by provider
 	* by collection
 	* by partial granule id
-* query
-	* all records (no input?)
-	* spatial only
-	* temporal only
-	* field only
-	* spatial & temporal
-	* spatial & field
-	* temporal & field
-	* spatial, temporal, & field
-* Parquet grouping
-	* by location
-	* by time
+
 
 ## Testing Application
 
