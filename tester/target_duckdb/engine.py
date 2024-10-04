@@ -1,10 +1,9 @@
 ''' Impliment the TargetSystem interface and support duckdb as a target testing system. '''
 
+import duckdb
+
 from util import target_system as tar_sys
 from util import test_config
-#import util
-
-import duckdb
 
 # SELECT
 #  geometry as geometry_duckdb,

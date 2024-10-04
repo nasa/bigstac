@@ -4,10 +4,10 @@ blast script
 '''
 
 import json
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
-from typing import Literal
 
 #pylint: disable=R0903
 
@@ -36,6 +36,7 @@ class OperationType(BaseModel):
         return self
 
 class ExpectedType(BaseModel):
+    ''' An expected result rule. '''
     action: Literal["count", "more-then", "less-then", "exact", "contain"]
     value: str | int
 

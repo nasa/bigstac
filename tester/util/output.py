@@ -8,9 +8,13 @@ import time
 import threading
 
 thread_info = {} # mapping of thread ids to thread counts starting at 0
+
+#pylint: disable=invalid-name
 log = None
 
 def init_logging(file_name):
+    ''' Setup logging '''
+    #pylint: disable=global-statement
     global log
     logging.basicConfig(filename=f"{os.path.basename(file_name)}.log", level=logging.INFO)
     log = logging.getLogger(os.path.basename(file_name))

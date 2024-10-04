@@ -6,12 +6,11 @@ Perform a set of tests against a parquet database like duckdb
 
 import argparse
 import sys
-import logging
-import os
 import time
 
-from util import test_config as tconfig
+from util import test_config
 from util import output
+from util import stats
 
 from target_duckdb import engine as duck
 
@@ -24,14 +23,13 @@ def parse_config(path:str)->dict:
     with open(path, 'r', encoding='utf-8') as file:
         #config = json.load(file)
         config = file.read()
-        return tconfig.from_json(config)
+        return test_config.from_json(config)
     return config
 
 def run(args):
     ''' Handle the script tasks '''
 
-    stats = {'count': 0, 'total_ms': 0, 'valid': 0, 'failed': 0, 'longest_ms': 0, 'longest_id': ''}
-
+    stat = stats.Stats()
     # 1. Parse configuration
     if args.config is None:
         output.error("No configuration file provided")
@@ -53,40 +51,40 @@ def run(args):
         out = engine.run_test(test)
         mark_stop = int(time.time() * 1000)
         mark_diff = mark_stop - mark_start
-        stats['count'] = stats['count'] + 1
-        stats['total_ms'] = stats['total_ms'] + mark_diff
-        if stats['longest_ms'] < mark_diff:
-            stats['longest_ms'] = mark_diff
-            stats['longest_id'] = config.name
+        stat.add('count', 1)
+        stat.add('total_ms', mark_diff)
+        stat.max('longest_ms', mark_diff, {'longest_id': config.name})
 
         #4. validate response
-        valid = False
         valid = verify(config.expected, out)
-        output.log.info(f"\tn={config.name}\tr={len(out)}\tms={mark_stop-mark_start}\tv={valid}")
-        if valid:
-            stats['valid'] = stats['valid'] + 1
-        else:
-            stats['failed'] = stats['failed'] + 1
+        stat.add('valid' if valid else 'failed', 1)
+        output.log.info("\tn=%s\tr=%d\tms=%d\tv=%s",
+            config.name, len(out), mark_stop-mark_start, valid)
 
     # 5. generate report
-    stats['average_ms'] = stats['total_ms'] / stats['count']
-    print(f"{stats}")
+    stat.store('average_ms', stat.get('total_ms', 1) / stat.get('count', 1))
+    print(stat.dump())
 
 def verify(expected, data) -> bool:
+    '''
+    Run a check on the data returned from the engine and see if it looks good using a set of defined
+    rules.
+    '''
     if not expected or not expected.action or not expected.value:
-        return true
+        return True
+    ret = False
     if expected.action == 'count':
-        return expected.value == len(data)
+        ret = expected.value == len(data)
     elif expected.action == 'greater-then':
-        return expected.value < len(data)
+        ret = expected.value < len(data)
     elif expected.action == 'less-then':
-        return expected.value > len(data)
+        ret = expected.value > len(data)
     elif expected.action == 'exact':
-        return str(expected.value) == data
+        ret = str(expected.value) == data
     elif expected.acton == 'contains':
         if expected.value in data:
-            return true
-    return false
+            ret = True
+    return ret
 
 # ################################################################################################ #
 # Mark: - Command functions
