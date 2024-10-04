@@ -3,3 +3,5 @@ pyyaml    # used to read in config files
 pyarrow   # ?
 pydantic  # file to object mapping (config files)
 shapely   # ?
+
+pylint
