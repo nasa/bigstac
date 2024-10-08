@@ -1,19 +1,34 @@
+'''
+A locust file to facilitate tests against a parquet database. This test takes the following inputs:
+env variables:
+*  data_path - Path to data such as '../scripts_explore/data/NSIDC_ECS'
+* call_count - A number of the times to call each test query
+* test_file - File listing all the test queries, json or yaml
+* engine - parquet system to test against, currently only 'duckdb'
+'''
 import inspect
 import os
-import subprocess
-import time
-from locust import User, task, events
 import queue
+import time
+
+from locust import User, task, events
 import duckdb
-import argparse
 
 from util import test_config
 
 from target_duckdb import engine as duck
 
+# Note: to lint, use `watch python3 $(which pylint) locustfile.py` to find libs
+
 # ################################################################################################ #
 
+# pylint: disable=invalid-name
+
+engine = None
+work_provider = None
+
 def check_function_implementation(func):
+    ''' Tests if a class has implemented a function with something other then 'pass'. '''
     source_lines = inspect.getsourcelines(func)[0]
     ans = False
     for line in source_lines:
@@ -38,42 +53,48 @@ class WorkItemProvider:
     '''
     A wrapper around the use_configuration to return a generator in the way that locust expects.
     '''
-    def __init__(self, engine, data_file):
+    def __init__(self, engine_to_use, data_file):
+        ''' parse the config file and setup a generator with a queue '''
         self.queue = queue.Queue()
         config = parse_config(data_file)
-        engine.use_configuration(config)
-        for row in engine.generate_tests():
+        engine_to_use.use_configuration(config)
+        for row in engine_to_use.generate_tests():
             self.queue.put(row)
     def get(self):
+        ''' Pop off the queue '''
         try:
             return self.queue.get_nowait()
         except queue.Empty:
             return None
-
-engine = None
-work_provider = None
+    def size(self):
+        ''' Required to return queue size '''
+        return self.queue.qsize()
 
 # ################################################################################################ #
 
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
+    ''' Function called by Locust to start test '''
     environment.path = os.environ.get('data_path', '../scripts_explore/data/NSIDC_ECS')
     environment.call_count = int(os.environ.get('call_count', 2))
     environment.test_file = os.environ.get('test_file', 'suite.json')
     environment.engine = os.environ.get('engine', 'duckdb')
     environment.use_direct_command = False
 
-    print(f"Using data path '{environment.path}' and config file '{environment.test_file}', " +
-        f"calling each test {environment.call_count} times against {environment.engine}.")
+    print(f"Using data path '{environment.path}' and config file '{environment.test_file}'.")
+    print(f"Calling each test {environment.call_count} times against {environment.engine}.")
+    print (f"Additional flags: {kwargs}")
 
     if environment.engine == 'duckdb':
         globals()['engine'] = duck.DuckDbSystem()
     else:
         print(f"💣 - No engine '{environment.engine}' defined.")
-        self.environment.runner.stop()
+        environment.runner.stop()
     globals()['work_provider'] = WorkItemProvider(engine, environment.test_file)
 
 class Foiegras(User):
+    ''' Locust User Class to facilitate the tests. This version will name users with a number. '''
+
     user_count = 0
 
     def __init__(self, *args, **kwards):
@@ -82,13 +103,20 @@ class Foiegras(User):
         self.user_id = f"{Foiegras.user_count}"
 
     def on_start(self):
+        ''' handle user start up tasks '''
         print(f"starting user {self.user_id}")
 
     def on_stop(self):
+        ''' Handle user shut down tasks '''
         print(f"stopping user {self.user_id}")
 
     @task
     def call_all_the_ducks(self):
+        '''
+        Run one test for a user.
+        do this by getting a search statment from the engine, then swap out any data path vars it
+        has. Run the search and check the response to see if it is valid.
+        '''
         item = work_provider.get()
         if item:
             for _ in range(self.environment.call_count):
@@ -121,6 +149,7 @@ class Foiegras(User):
                         output = engine.run_test(sql)
                         stop_time = time.time()
                         output = '\n'.join(output)
+                        error = None
 
                     if error:
                         print(error)
