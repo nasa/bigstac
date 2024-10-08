@@ -1,0 +1,109 @@
+{
+    "name": "Primary tests",
+    "description": "A basic set of tests modled after: SELECT granule, geometry FROM parquet_scan('data/{provider}/{short_name}/all.parquet') WHERE st_intersects(geometry::geometry, '{user_search}'::GEOMETRY) ORDER BY granule",
+    "inputs": ["data"],
+    "tests": [
+        {
+            "name": "test1-with-time",
+            "description": "conduct an intersecting box and time based search which is then sorted",
+            "operations": [
+                {
+                    "ands": [
+                        {
+                            "description": "does a box interset and find records",
+                            "type_of": "geometry",
+                            "option": "intersects",
+                            "value": "POLYGON((-110.60867891721024 53.37487808881224, -110.60867891721024 53.29764645852637, -109.73806661064765 53.29764645852637, -109.73806661064765 53.37487808881224, -110.60867891721024 53.37487808881224))"
+                        },
+                        {
+                            "description": "are their records that come after a fixed date",
+                            "type_of": "time",
+                            "option": "greater-then",
+                            "value": "2017-06-29T16:21"
+                        }
+                    ]
+                }
+            ],
+            "sortby": "granule",
+            "source": "{data}/**/all.parquet",
+            "expected": {"action": "count", "value": 11208}
+        },
+        {
+            "name": "test1-timeless",
+            "description": "conduct an time based search",
+            "operations": [
+                {
+                    "ands": [
+                        {
+                            "description": "does a box interset and find records",
+                            "type_of": "geometry",
+                            "option": "intersects",
+                            "value": "POLYGON((-110.60867891721024 53.37487808881224, -110.60867891721024 53.29764645852637, -109.73806661064765 53.29764645852637, -109.73806661064765 53.37487808881224, -110.60867891721024 53.37487808881224))"
+                        }
+                    ]
+                }
+            ],
+            "sortby": "granule",
+            "source": "{data}/**/all.parquet",
+            "expected": {"action": "count", "value": 11208}
+        },
+        {
+            "name": "test1-onlytime",
+            "description": "conduct an time based search",
+            "operations": [
+                {
+                    "ands": [
+                        {
+                            "description": "are their records that come after a fixed date",
+                            "type_of": "time",
+                            "option": "greater-then",
+                            "value": "2017-06-29T16:21"
+                        }
+                    ]
+                }
+            ],
+            "sortby": "granule",
+            "source": "{data}/**/all.parquet",
+            "expected": {"action": "count", "value": 11208}
+        },
+
+        {
+            "name": "test2-onlytime",
+            "description": "conduct an time based search",
+            "operations": [
+                {
+                    "ands": [
+                        {
+                            "description": "are their records that come after a fixed date",
+                            "type_of": "time",
+                            "option": "greater-then",
+                            "value": "2015-06-29T16:21"
+                        }
+                    ]
+                }
+            ],
+            "sortby": "granule",
+            "source": "{data}/**/all.parquet",
+            "expected": {"action": "count", "value": 11208}
+        },
+        {
+            "name": "test3-onlytime",
+            "description": "conduct an time based search which is less then",
+            "operations": [
+                {
+                    "ands": [
+                        {
+                            "description": "are their records that come after a fixed date",
+                            "type_of": "time",
+                            "option": "less-then",
+                            "value": "2015-06-29T16:21"
+                        }
+                    ]
+                }
+            ],
+            "sortby": "granule",
+            "source": "{data}/**/all.parquet",
+            "expected": {"action": "count", "value": 11208}
+        }
+    ]
+}

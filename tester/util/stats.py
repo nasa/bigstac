@@ -31,6 +31,18 @@ class Stats():
         if not self._ensure(name, value):
             self.stats[name] = self.stats[name] + value
 
+    def value(self, name, value, data:str = None):
+        self.min('min', value, {'min-id': data})
+        self.max('max', value, {'max-id': data})
+        #what about median
+
+    def min(self, name, value, data:dict = None):
+        created = self._ensure(name, value)
+        if value < self.stats[name] or created:
+            self.stats[name] = value
+            if data:
+                for k,v in data.items():
+                    self.stats[k] = v
 
     def max(self, name, value, data:dict = None):
         '''
