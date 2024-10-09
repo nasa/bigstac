@@ -100,7 +100,7 @@ def work(args):
 
     # setup
     task_list = [] # things to do
-    query = f"select * from '{args.data}'"
+    query = f"select * from read_parquet({args.data})"
     logging.debug(query)
 
     # create list of things to do
