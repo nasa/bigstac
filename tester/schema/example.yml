@@ -3,11 +3,9 @@ description: >-
   A basic set of tests modled after: SELECT granule, geometry FROM
   parquet_scan('data/{provider}/{short_name}/all.parquet') WHERE
   st_intersects(geometry::geometry, '{user_search}'::GEOMETRY) ORDER BY granule
-inputs:
-  - provider
-  - short_name
 tests:
-  - description: conduct an intersecting box and time based search which is then sorted
+  - name: Test-One
+    description: conduct an intersecting box and time based search which is then sorted
     operations:
       - ands:
           - description: does a box interset and find records
@@ -25,5 +23,5 @@ tests:
     sortby: granule
     source: '{data}/**/all.parquet'
     expected:
-      -action: count
-      -value: 11208
+      action: count
+      value: 11208

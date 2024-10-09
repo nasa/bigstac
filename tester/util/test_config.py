@@ -72,8 +72,12 @@ def from_yaml(raw_yaml:str) -> AssessConfig:
     return AssessConfig(**data)
 
 # ################################################################################################ #
+# tested with `watch python3 util/test_config.py` which triggers the __main__
 
+# JSON Test Data
 unit_test_data_json = {
+    'name': 'Primary Tests in JSON',
+    'description': "A basic set of tests",
     'tests': [
         {
             'name': 'geo1',
@@ -96,5 +100,37 @@ unit_test_data_json = {
     ]
 }
 
-unit_test_data_pydamic = AssessConfig(**unit_test_data_json)
-assert unit_test_data_pydamic.tests[0].operations[0].ands[0].type_of == 'geometry'
+# YAML Test Data
+unit_test_data_yaml = '''
+name: Primary tests
+description: A basic set of tests
+
+tests:
+  - name: First-test
+    description: conduct an intersecting box and time based search which is then sorted
+    operations:
+      - ands:
+          - description: does a box interset and find records
+            type_of: geometry
+            option: intersects
+            value: >-
+              POLYGON((-110.60867891721024 53.37487808881224,
+              -110.60867891721024 53.29764645852637, -109.73806661064765
+              53.29764645852637, -109.73806661064765 53.37487808881224,
+              -110.60867891721024 53.37487808881224))
+          - description: are their records that come after a fixed date
+            type_of: time
+            option: greater-then
+            value: '2017-06-29T16:21'
+    expected:
+      action: count
+      value: 11208
+'''
+
+if __name__ == "__main__":
+    # do the tests
+    unit_test_data_pydamic1 = AssessConfig(**unit_test_data_json)
+    assert unit_test_data_pydamic1.tests[0].operations[0].ands[0].type_of == 'geometry'
+
+    unit_test_data_pydamic2 = from_yaml(unit_test_data_yaml)
+    assert unit_test_data_pydamic2.tests[0].operations[0].ands[0].type_of == 'geometry'
