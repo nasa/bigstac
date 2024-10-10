@@ -78,6 +78,24 @@ Configuration is done via environmental variables. The Following variables are s
 | test_file  | suite.json     | Search query config file
 | engine     | duckdb         | Name of the engine to test against, currently only DuckDB
 
+## Findings
+
+### Multi processing
+
+the duckdb python library will support multiple threads but only if a `conn = duckdb.connect()` is used first and then each thread gets a copy of the connection with `conn.cursor()`.
+
+Read only mode is not supported with in-memory databases.
+
+Other notes:
+
+* https://duckdb.org/faq.html#how-does-duckdb-handle-concurrency-can-multiple-processes-write-to-duckdb
+* https://duckdb.org/docs/guides/performance/how_to_tune_workloads.html
+* https://duckdb.org/docs/connect/concurrency.html
+* https://duckdb.org/docs/guides/python/multiple_threads
+* https://duckdb.org/docs/api/python/reference/#duckdb.connect
+* https://duckdb.org/docs/data/multiple_files/overview.html#list-of-globs
+* https://duckdb.org/docs/configuration/overview.html
+* https://duckdb.org/docs/guides/performance/my_workload_is_slow
 
 ## License
 Copyright &copy; 2024 United States Government as represented by the Administrator of the National Aeronautics and Space Administration. All Rights Reserved.

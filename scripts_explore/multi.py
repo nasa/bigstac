@@ -96,7 +96,10 @@ def process_job(conn, details:dict) -> list:
 def work(args):
     ''' Create a work list and several threads to prove if Duckdb can handle it. '''
     globals()['thread_info'] = {}
-    globals()['conn'] = conn = duckdb.connect()
+    globals()['conn'] = conn = duckdb.connect(config = {'threads': 4,
+        'worker_threads': 4,
+        'external_threads': 4,
+        'allocator_background_threads': True})
 
     # setup
     task_list = [] # things to do
