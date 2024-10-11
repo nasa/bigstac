@@ -71,6 +71,16 @@ def from_yaml(raw_yaml:str) -> AssessConfig:
     data = yaml.safe_load(raw_yaml)
     return AssessConfig(**data)
 
+def from_file(path:str) -> dict:
+    ''' Parse a config file of type json or yamle and convert it to a TestConfig object. '''
+    config = None
+    with open(path, 'r', encoding='utf-8') as file:
+        config = file.read()
+        if path[:5] == '.yaml':
+            return from_yaml(config)
+        return from_json(config)
+    return config
+
 # ################################################################################################ #
 # tested with `watch python3 util/test_config.py` which triggers the __main__
 

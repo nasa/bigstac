@@ -30,6 +30,8 @@ class TargetSystem:
     def run_test_as_script(self, code:str) -> (str,str):
         pass
 
+    def run_test_as_thread(self, curser, code:str):
+        pass
 
     def verify(self, expected, data) -> bool:
         '''
@@ -51,3 +53,6 @@ class TargetSystem:
             if expected.value in data:
                 ret = True
         return ret
+
+    def give_to_each_user(self):
+        return None

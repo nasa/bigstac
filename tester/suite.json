@@ -24,7 +24,7 @@
                     ]
                 }
             ],
-            "sortby": "granule",
+            "sortby": "GranuleID",
             "source": "{data}/**/all.parquet",
             "expected": {"action": "count", "value": 11208}
         },
@@ -43,7 +43,7 @@
                     ]
                 }
             ],
-            "sortby": "granule",
+            "sortby": "granuleid",
             "source": "{data}/**/all.parquet",
             "expected": {"action": "count", "value": 11208}
         },
@@ -62,7 +62,7 @@
                     ]
                 }
             ],
-            "sortby": "granule",
+            "sortby": "granuleid",
             "source": "{data}/**/all.parquet",
             "expected": {"action": "count", "value": 11208}
         },
@@ -82,7 +82,7 @@
                     ]
                 }
             ],
-            "sortby": "granule",
+            "sortby": "granuleid",
             "source": "{data}/**/all.parquet",
             "expected": {"action": "count", "value": 11208}
         },
@@ -101,7 +101,7 @@
                     ]
                 }
             ],
-            "sortby": "granule",
+            "sortby": "granuleid",
             "source": "{data}/**/all.parquet",
             "expected": {"action": "count", "value": 11208}
         }

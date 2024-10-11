@@ -5,10 +5,8 @@ import subprocess
 
 import duckdb
 
-from util import target_system as tar_sys
+from util import target_system
 from util import test_config
-
-
 
 # SELECT
 #  geometry as geometry_duckdb,
@@ -17,10 +15,15 @@ from util import test_config
 # WHERE st_contains(geometry::geometry, 'POINT(-83.0123 40)'::GEOMETRY)
 # LIMIT 1
 
-lock = threading.Lock()
-
-class DuckDbSystem(tar_sys.TargetSystem):
+class DuckDbSystem(target_system.TargetSystem):
     ''' Base system '''
+
+    connection: None
+
+    def __init__(self):
+        self.connection = duckdb.connect()
+        self.connection.install_extension("spatial")
+        self.connection.load_extension("spatial")
 
     def generate_tests(self) -> [str, test_config.AssessType]:
         ''' Generator to produce tests specific to the system. Will call yield. '''
@@ -69,18 +72,18 @@ class DuckDbSystem(tar_sys.TargetSystem):
 
         stm = f"\n\t-- {step.description}\n"
         if step.option == 'greater-then':
-            stm += f"\tdatetime >= '{step.value}'"
+            stm += f"StartTime >= '{step.value}'"
         elif step.option == 'less-then':
-            stm += f"\tdatetime <= '{step.value}'"
+            stm += f"\tStartTime <= '{step.value}'"
         elif step.option == 'range':
             parts = step.value.split('/')
             stm += '\t('
             if parts[0]:
-                stm += f"start_datetime <= '{parts[0]}'"
+                stm += f"StartTime <= '{parts[0]}'"
             if parts[0] and len(parts)==2 and parts[1]:
                 stm += ' AND '
             if len(parts)==2 and parts[1]:
-                stm += f"'{parts[1]}' <= stop_datetime"
+                stm += f"'{parts[1]}' <= StopTime"
             stm += ')'
         return stm
 
@@ -91,9 +94,15 @@ class DuckDbSystem(tar_sys.TargetSystem):
         error = result.stderr
         return output, error
 
-    def run_test(self, code:str) -> list:
-        lock.acquire()
-        # only one at a time can call duckdb
-        res = duckdb.sql(code).fetchall()
-        lock.release()
+    def run_test_as_thread(self, cursor, sql:str) -> list:
+        # Use cursor provided to run call
+        res = cursor.sql(sql).fetchall()
         return res
+
+    def run_test(self, code:str) -> list:
+        # only one at a time can call duckdb
+        res = self.connection.sql(code).fetchall()
+        return res
+
+    def give_to_each_user(self):
+        return self.connection
