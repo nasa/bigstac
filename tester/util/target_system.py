@@ -49,7 +49,7 @@ class TargetSystem:
             ret = expected.value > len(data)
         elif expected.action == 'exact':
             ret = str(expected.value) == data
-        elif expected.acton == 'contains':
+        elif expected.action == 'contains':
             if expected.value in data:
                 ret = True
         return ret

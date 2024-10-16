@@ -38,12 +38,15 @@ def run_one_test(engine:duck, tries:int, data_dir:str, stat:stats.Stats, data:di
         sub.value(mark_diff)
 
         #5. validate response
-        #valid = engine.verify(config.expected, out)
-        valid = True # TODO -- patch fix for EC2 mvp job, decide what to do
-        sub.add('valid' if valid else 'failed', 1)
+        valid = None
+        if config.expected:
+            # configuration has an expected setting, so verify it
+            valid = engine.verify(config.expected, out)
+            stat.add('valid' if valid else 'failed', 1) # top level, all tests
+            sub.add('valid' if valid else 'failed', 1) # lower level, just this test
         output.log.info("\tn=%s\tr=%d\tms=%d\tv=%s",
             config.name, len(out), mark_stop-mark_start, valid)
-    return out #give the last one back
+    return out #give the last one back so there is something to work with in the caller
 
 def run(args):
     ''' Handle the script tasks '''

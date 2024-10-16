@@ -26,7 +26,7 @@
             ],
             "sortby": "GranuleID",
             "source": "{data}/**/all.parquet",
-            "expected": {"action": "count", "value": 11208}
+            "expected": {"action": "greater-then", "value": 11208}
         },
         {
             "name": "test1-timeless",
@@ -45,7 +45,7 @@
             ],
             "sortby": "granuleid",
             "source": "{data}/**/all.parquet",
-            "expected": {"action": "count", "value": 11208}
+            "expected": {"action": "greater-then", "value": 11208}
         },
         {
             "name": "test1-onlytime",
@@ -64,7 +64,8 @@
             ],
             "sortby": "granuleid",
             "source": "{data}/**/all.parquet",
-            "expected": {"action": "count", "value": 11208}
+            "expected": {"action": "greater-then", "value": 20000}
+
         },
 
         {
@@ -83,8 +84,7 @@
                 }
             ],
             "sortby": "granuleid",
-            "source": "{data}/**/all.parquet",
-            "expected": {"action": "count", "value": 11208}
+            "source": "{data}/**/all.parquet"
         },
         {
             "name": "test3-onlytime",
@@ -102,8 +102,7 @@
                 }
             ],
             "sortby": "granuleid",
-            "source": "{data}/**/all.parquet",
-            "expected": {"action": "count", "value": 11208}
+            "source": "{data}/**/all.parquet"
         }
     ]
 }

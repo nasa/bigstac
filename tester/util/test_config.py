@@ -37,7 +37,7 @@ class OperationType(BaseModel):
 
 class ExpectedType(BaseModel):
     ''' An expected result rule. '''
-    action: Literal["count", "more-then", "less-then", "exact", "contain"]
+    action: Literal["count", "greater-then", "less-then", "exact", "contain"]
     value: str | int
 
 class AssessType(BaseModel):
