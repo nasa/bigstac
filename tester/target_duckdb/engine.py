@@ -22,6 +22,8 @@ class DuckDbSystem(target_system.TargetSystem):
 
     def __init__(self):
         self.connection = duckdb.connect()
+        self.connection.install_extension("aws")
+        self.connection.load_extension("aws")
         self.connection.install_extension("spatial")
         self.connection.load_extension("spatial")
 
