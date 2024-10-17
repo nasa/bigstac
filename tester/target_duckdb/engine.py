@@ -21,7 +21,7 @@ class DuckDbSystem(target_system.TargetSystem):
     connection: None
 
     def __init__(self):
-        self.connection = duckdb.connect()
+        self.connection = duckdb.connect('~/test_lpcloud_data/single_file/native.db') # TEMPORARY
         self.connection.install_extension("aws")
         self.connection.load_extension("aws")
         self.connection.install_extension("spatial")
@@ -43,7 +43,8 @@ class DuckDbSystem(target_system.TargetSystem):
             sort_stm = ''
             if test.sortby:
                 sort_stm = f"ORDER by {test.sortby}"
-            sql = f"-- {test.description}\nSELECT *\nFROM read_parquet({src})\nWHERE {where_stm}\n{sort_stm}"
+            # sql = f"-- {test.description}\nSELECT *\nFROM read_parquet({src})\nWHERE {where_stm}\n{sort_stm}"
+            sql = f"-- {test.description}\nSELECT *\nFROM {src}\nWHERE {where_stm}\n{sort_stm}"
             yield [sql, test]
 
     def generate_geometry(self, step: test_config.OpType) -> str:
