@@ -12,7 +12,7 @@ import time
 from util import test_config
 from util import output
 from util import stats
-
+import os
 from target_duckdb import engine as duck
 
 # ################################################################################################ #
@@ -23,7 +23,6 @@ def run_one_test(engine:duck, tries:int, data_dir:str, stat:stats.Stats, data:di
     test_query = data[0]
     config = data[1]
     test_query = test_query.replace('{data}', data_dir)
-    test_query = test_query.replace('all.parquet', '*.parquet') #not a long term solution
     output.log.debug (test_query)
     out = None
     for _ in range(tries):
@@ -109,7 +108,8 @@ def handle_args() -> argparse.Namespace:
 
     # Add command-line arguments
     parser.add_argument("config", help='Path to configuration file.')
-    parser.add_argument("-d", "--data", help='Path to data files which goes into {data}.')
+    parser.add_argument("-d", "--data",
+        help='Path to data files which goes into {data}. Include any quotes or [] as needed')
     parser.add_argument("-m", "--mode", default='single', help='Processing mode. single is best.')
     parser.add_argument("-s", "--system", default='duckdb', help="path to configuration file.")
     parser.add_argument("-t", "--tries", default='8', type=int,

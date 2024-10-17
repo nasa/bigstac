@@ -30,7 +30,7 @@ class DuckDbSystem(target_system.TargetSystem):
     def generate_tests(self) -> [str, test_config.AssessType]:
         ''' Generator to produce tests specific to the system. Will call yield. '''
         for test in self.data.tests:
-            src = test.source if test.source else '{data}/**/all.parquet'
+            src = test.source if test.source else '{data}/**/*.parquet'
             where_list = []
             for op in test.operations:
                 for step in op.ands:
@@ -43,24 +43,24 @@ class DuckDbSystem(target_system.TargetSystem):
             sort_stm = ''
             if test.sortby:
                 sort_stm = f"ORDER by {test.sortby}"
-            sql = f"-- {test.description}\nSELECT *\nFROM '{src}'\nWHERE {where_stm}\n{sort_stm}"
+            sql = f"-- {test.description}\nSELECT *\nFROM read_parquet({src})\nWHERE {where_stm}\n{sort_stm}"
             yield [sql, test]
 
-    def generate_geometry(self, step) -> str:
+    def generate_geometry(self, step: test_config.OpType) -> str:
         ''' Generate a Geometry statment for the where close '''
         # intersects = st_intersects
         # contains = st_contains
         partial_statment = f"\n\t-- {step.description}\n"
         if step.option == 'intersects':
-            partial_statment += f"\tst_intersects(geometry::geometry, '{step.value}'::GEOMETRY)\n"
+            partial_statment += f"\tst_intersects(geometry, '{step.value}'::GEOMETRY)\n"
         elif step.option == 'contains':
-            partial_statment += f"\tst_contains(geometry::geometry, '{step.value}'::GEOMETRY)\n"
+            partial_statment += f"\tst_contains(geometry, '{step.value}'::GEOMETRY)\n"
         else:
             partial_statment += f"\n-- {step.option} is known\n"
 
         return partial_statment
 
-    def generate_time(self, step) -> str:
+    def generate_time(self, step: test_config.OpType) -> str:
         ''' Generate a Time statment for the where close '''
         # datetime
         # end_datetime

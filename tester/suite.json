@@ -25,7 +25,7 @@
                 }
             ],
             "sortby": "GranuleID",
-            "source": "{data}/**/all.parquet",
+            "source": "{data}",
             "expected": {"action": "greater-then", "value": 11208}
         },
         {
@@ -44,7 +44,7 @@
                 }
             ],
             "sortby": "granuleid",
-            "source": "{data}/**/all.parquet",
+            "source": "{data}",
             "expected": {"action": "greater-then", "value": 11208}
         },
         {
@@ -63,7 +63,7 @@
                 }
             ],
             "sortby": "granuleid",
-            "source": "{data}/**/all.parquet",
+            "source": "{data}",
             "expected": {"action": "greater-then", "value": 20000}
 
         },
@@ -84,7 +84,7 @@
                 }
             ],
             "sortby": "granuleid",
-            "source": "{data}/**/all.parquet"
+            "source": "{data}"
         },
         {
             "name": "test3-onlytime",
@@ -102,7 +102,7 @@
                 }
             ],
             "sortby": "granuleid",
-            "source": "{data}/**/all.parquet"
+            "source": "{data}"
         }
     ]
 }
