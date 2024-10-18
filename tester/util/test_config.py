@@ -48,6 +48,7 @@ class AssessType(BaseModel):
     columns: list[str] = ['*']
     operations: list[OperationType]
     sortby: str = None
+    limit: int = 2000
     source: str = '**/*.parquet'
     expected: ExpectedType = None
 

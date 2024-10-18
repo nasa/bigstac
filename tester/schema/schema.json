@@ -52,6 +52,10 @@
                     "type": "string",
                     "description": "how the results should be sorted."
                 },
+                "limit": {
+                    "type": "integer",
+                    "description": "how many results should be returned."
+                },
                 "source": {
                     "type": "string",
                     "description": "where to pull the data from, could be a local path or an s3 bucket",

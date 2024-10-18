@@ -7,6 +7,8 @@ import duckdb
 
 from util import target_system
 from util import test_config
+from util import output
+
 
 # SELECT
 #  geometry as geometry_duckdb,
@@ -49,7 +51,8 @@ SELECT *
 FROM read_parquet({src})
 WHERE {where_stm}
 {sort_stm}
-LIMIT 2000"""
+LIMIT {test.limit}"""
+            output.log.info(sql)
             yield [sql, test]
 
     def generate_geometry(self, step: test_config.OpType) -> str:
