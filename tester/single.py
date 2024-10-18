@@ -20,14 +20,16 @@ from target_duckdb import engine as duck
 # ################################################################################################ #
 # Mark: - Functions
 
-def run_one_test(engine:duck, tries:int, data_dir:str, stat:stats.Stats, data:dict):
+def run_one_test(engine:duck, args:argparse.Namespace, stat:stats.Stats, data:dict):
     ''' Run one query and record the statistical information about that call. '''
+    data_dir = args.data
+
     test_query = data[0]
     config = data[1]
     test_query = test_query.replace('{data}', data_dir)
     output.log.debug (test_query)
     out = None
-    for _ in range(tries):
+    for _ in range(args.tries):
         mark_start = int(time.time() * 1000)
         out = engine.run_test(test_query)
         mark_stop = int(time.time() * 1000)
@@ -37,6 +39,7 @@ def run_one_test(engine:duck, tries:int, data_dir:str, stat:stats.Stats, data:di
         stat.value(mark_diff, config.name)
         sub = stat.get_sub(config.name)
         sub.value(mark_diff)
+        sub.note("note", args.note)
 
         #5. validate response
         valid = None
@@ -82,13 +85,13 @@ def run(args):
     if mode == 'single':
         # One thread at a time
         for resp in engine.generate_tests():
-            result = run_one_test(engine, args.tries, args.data, stat, resp)
+            result = run_one_test(engine, args, stat, resp)
             output.log.debug(result)
 
     elif mode == 'process':
         # original action, multiple threads used, but watch connections
         with multiprocessing.Pool() as p:
-            tester = functools.partial(run_one_test, engine, args.tries, args.data, stat)
+            tester = functools.partial(run_one_test, engine, args, stat)
             for result in p.map(lambda x : tester, engine.generate_tests()):
                 if result is not None:
                     output.log.debug(result)
@@ -96,7 +99,7 @@ def run(args):
     elif mode == 'thread':
         # and idea that may not be fully functioning
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-            results = executor.map(lambda x : run_one_test(engine, args.tries, args.data, stat, x),
+            results = executor.map(lambda x : run_one_test(engine, args, stat, x),
                 engine.generate_tests(),
                 timeout=60)
             for r in results:

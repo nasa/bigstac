@@ -33,6 +33,10 @@ class Stats():
         self._ensure(name, init_value)
         return self.stats[name]
 
+    def note(self, name:str, value:str):
+        ''' Store a note in the stats overwriting any existing value. '''
+        self.stats[name] = value
+
     def store(self, name:str, value:int|float):
         ''' Store a value in the stats overwriting any existing value. '''
         self.stats[name] = value
@@ -99,6 +103,7 @@ class Stats():
 
     def csv(self, out_file):
         headers = [
+        'note',
         'name',
          'count',
          'total',
