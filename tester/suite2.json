@@ -20,7 +20,8 @@
           ]
         }
       ],
-      "source": "{data}"
+      "source": "{data}",
+      "expected": {"action": "greater-then", "value": 0}
     },
     {
       "name": "California_bbox-SortBy_granuleid",
