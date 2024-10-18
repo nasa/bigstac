@@ -12,6 +12,8 @@ import time
 from util import test_config
 from util import output
 from util import stats
+from util import file
+from util import tools
 import os
 from target_duckdb import engine as duck
 
@@ -57,6 +59,10 @@ def run(args):
         sys.exit(1)
     config = test_config.from_file(args.config)
 
+    output.log.critical(f"Starting test run: {args.note} - {config.name}")
+    if args.verbose:
+        print(f"Starting test run: {args.note} - {config.name}")
+
     # 2. select test target engine
     engine = None
     if args.system == 'duckdb':
@@ -98,9 +104,15 @@ def run(args):
                     output.log.debug(r.get())
 
     #6. generate report
-    output.log.info(stat.dump())
+    base_name = f"{tools.iso_ish()}-{tools.file_safe(config.name)}-{args.note}"
+    file.write(stat.dump(), f"{base_name}.json")
+    stat.csv(f"{base_name}.csv")
+
+    output.log.info("#"*80)
+
     if args.verbose:
         print(stat.dump())
+        print("#"*80)
 
 # ################################################################################################ #
 # Mark: - Command functions
@@ -113,6 +125,7 @@ def handle_args() -> argparse.Namespace:
     parser.add_argument("config", help='Path to configuration file.')
     parser.add_argument("-d", "--data",
         help='Path to data files which goes into {data}. Include any quotes or [] as needed')
+    parser.add_argument("-n", "--note", default='normal', help='give a note about this specific run.')
     parser.add_argument("-m", "--mode", default='single', help='Processing mode. single is best.')
     parser.add_argument("-s", "--system", default='duckdb', help="path to configuration file.")
     parser.add_argument("-t", "--tries", default='8', type=int,

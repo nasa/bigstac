@@ -1,6 +1,8 @@
 ''' All functions related to the Stats object, an object to collect statistical information. '''
 
 import statistics
+import csv
+import json
 
 class Stats():
     ''' An object to track status in a dictionary with some convenience functions to manage them '''
@@ -87,26 +89,55 @@ class Stats():
         return str(self.stats)
 
     def dump(self) -> str:
-        ''' Dump a string representation of the stats and subs '''
-        out = str(self.stats)
-        for i in self.subs:
-            out += '\n' + i + "=" + str(self.subs[i])
-        return out
+        out = self.stats.copy()
+        out['tests'] = []
+        for test in self.subs:
+            item = self.subs[test].stats
+            item['name'] = test
+            out['tests'].append(item)
+        return json.dumps(out)
+
+    def csv(self, out_file):
+        headers = [
+        'name',
+         'count',
+         'total',
+         'min',
+         'min-id',
+         'max',
+         'max-id',
+         'average',
+         'median',
+         'list',
+         'failed'
+        ]
+        with open(out_file, 'w', encoding="utf8") as file:
+            writer = csv.DictWriter(file, fieldnames=headers)
+            writer.writeheader()
+            for sub in self.subs:
+                data = self.subs[sub].stats.copy()
+                data['name'] = sub
+                writer.writerow(data)
 
 #s = Stats()
 #print(s.max('test', 10, {'alt':3.14}))
 
-# s = Stats()
-# s.max('outer-test', 5)
-# sub = s.get_sub("test")
-# sub.max('inner-test1', 10)
-# sub.max('inner-test1', 5)
-# sub.max('inner-test1', 15)
-# sub.max('inner-test2', 10)
-# sub.max('inner-test2', 5)
-# sub.max('inner-test2', 15)
+def create_a_test_stats_object():
+    s = Stats()
+    s.max('outer-test', 5)
+    sub = s.get_sub("test1")
+    sub.max('max', 10)
+    sub.max('max', 5)
+    sub.max('max', 15)
+    sub = s.get_sub("test2")
+    sub.max('max', 10)
+    sub.max('max', 5)
+    sub.max('max', 15)
+    return s
 
-# print(s)
+#s = create_a_test_stats_object()
+#print(s.csv('test.csv'))
+
 # print(s.get_sub('test'))
 # print('-'*10)
 # print(s.dump())
