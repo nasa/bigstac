@@ -61,6 +61,9 @@ def run(args):
     engine = None
     if args.system == 'duckdb':
         engine = duck.DuckDbSystem()
+    elif args.system == 'mallard': # duckdb using a native database ; Mallards are native to America
+        # not well tested at this point (2024-10-18)
+        engine = duck.NativeDuckSystem('~/test_lpcloud_data/single_file/native.db')
     else:
         output.log.error('no engine defined')
         sys.exit(-1)
