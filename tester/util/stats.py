@@ -114,6 +114,7 @@ class Stats():
          'average',
          'median',
          'list',
+         'valid',
          'failed'
         ]
         with open(out_file, 'w', encoding="utf8") as file:
