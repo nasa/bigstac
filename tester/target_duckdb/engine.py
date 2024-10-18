@@ -37,28 +37,43 @@ class DuckDbSystem(target_system.TargetSystem):
                 # test provides it's own sql
                 sql= test.raw
             else:
-                # build the sql from the test config
-                where_list = []
-                for op in test.operations:
-                    for step in op.ands:
-                        if step.type_of == 'geometry':
-                            where_list.append(self.generate_geometry(step))
-                        elif step.type_of == 'time':
-                            where_list.append(self.generate_time(step))
-
-                stm_where = '\tAND'.join(where_list)
-                stm_sort = f"ORDER BY {test.sortby}" if test.sortby else ''
-                stm_limit = f"LIMIT {test.limit}" if test.limit > 0 else ''
-
-                sql = f"""
-    -- {test.description}
-    SELECT {','.join(test.columns)}
-    FROM read_parquet({src})
-    WHERE {stm_where}
-    {stm_sort}
-    {stm_limit}"""
+                sql = f"""-- {test.description}
+    SELECT {self.generate_select(test)}
+    FROM {self.generate_from(src)}
+    WHERE {self.generate_where(test)}
+    {self.generate_sort(test)}
+    {self.generate_limit(test)}"""
                 output.log.info(sql)
             yield [sql, test]
+
+    def generate_select(self, test: test_config.AssessType) -> str:
+        ''' Generate a select statment of the sql '''
+        return ','.join(test.columns)
+
+    def generate_from(self, src:str) -> str:
+        ''' Generate a from statment of the sql '''
+        return f"read_parquet({src})"
+
+    def generate_sort(self, test: test_config.AssessType) -> str:
+        ''' Generate a sort statment of the sql '''
+        return f"ORDER BY {test.sortby}" if test.sortby else ''
+
+    def generate_limit(self, test: test_config.AssessType) -> str:
+        ''' Generate a limit statment of the sql '''
+        return f"LIMIT {test.limit}" if test.limit > 0 else ''
+
+    def generate_where(self, test: test_config.AssessType) -> str:
+        ''' Generate a where statment of the sql '''
+        where_list = []
+        for op in test.operations:
+            for step in op.ands:
+                if step.type_of == 'geometry':
+                    where_list.append(self.generate_geometry(step))
+                elif step.type_of == 'time':
+                    where_list.append(self.generate_time(step))
+
+        stm_where = '\tAND'.join(where_list)
+        return stm_where
 
     def generate_geometry(self, step: test_config.OpType) -> str:
         ''' Generate a Geometry statment for the where close '''
@@ -88,7 +103,7 @@ class DuckDbSystem(target_system.TargetSystem):
 
         stm = f"\n\t-- {step.description}\n"
         if step.option == 'greater-then':
-            stm += f"StartTime >= '{step.value}'"
+            stm += f"\tStartTime >= '{step.value}'"
         elif step.option == 'less-then':
             stm += f"\tStartTime <= '{step.value}'"
         elif step.option == 'range':

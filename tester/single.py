@@ -16,6 +16,7 @@ from util import file
 from util import tools
 import os
 from target_duckdb import engine as duck
+from target_duckdb import native as mallard
 
 # ################################################################################################ #
 # Mark: - Functions
@@ -72,7 +73,7 @@ def run(args):
         engine = duck.DuckDbSystem()
     elif args.system == 'mallard': # duckdb using a native database ; Mallards are native to America
         # not well tested at this point (2024-10-18)
-        engine = duck.NativeDuckSystem('~/test_lpcloud_data/single_file/native.db')
+        engine = mallard.NativeDuckSystem('~/test_lpcloud_data/single_file/native.db')
     else:
         output.log.error('no engine defined')
         sys.exit(-1)
@@ -130,7 +131,7 @@ def handle_args() -> argparse.Namespace:
         help='Path to data files which goes into {data}. Include any quotes or [] as needed')
     parser.add_argument("-n", "--note", default='normal', help='give a note about this specific run.')
     parser.add_argument("-m", "--mode", default='single', help='Processing mode. single is best.')
-    parser.add_argument("-s", "--system", default='duckdb', help="path to configuration file.")
+    parser.add_argument("-s", "--system", default='duckdb', help="engine to test, duckdb or mallard")
     parser.add_argument("-t", "--tries", default='8', type=int,
         help="Number of times to run a test.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
