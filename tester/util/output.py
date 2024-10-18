@@ -17,7 +17,7 @@ def init_logging(file_name):
     #pylint: disable=global-statement
     global log
     logging.basicConfig(filename=f"{os.path.basename(file_name)}.log", level=logging.INFO)
-    log = logging.getLogger(os.path.basename(file_name))
+    log = logging.getLogger(os.path.basename(file_name) + '.log')
 
 def error(msg):
     ''' Print out an error message. '''
