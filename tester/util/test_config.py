@@ -45,12 +45,20 @@ class AssessType(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
     name: str = None
     description: str = None
+    raw: str = None
     columns: list[str] = ['*']
-    operations: list[OperationType]
+    operations: list[OperationType] = None
     sortby: str = None
     limit: int = 2000
     source: str = '**/*.parquet'
     expected: ExpectedType = None
+
+    @model_validator(mode='after')
+    def check_raw_or_operations(self) -> 'AssessType':
+        ''' impliment a one_of requirment like in jsonschema '''
+        if (self.raw is None) and (self.operations is None):
+            raise ValueError("At least one of 'raw' or 'operations' must be provided")
+        return self
 
 class AssessConfig(BaseModel):
     ''' The entire test suite. '''

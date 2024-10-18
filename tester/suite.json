@@ -103,6 +103,12 @@
             ],
             "sortby": "granuleid",
             "source": "{data}"
+        },
+        {
+            "name": "raw-test",
+            "description": "conduct an time based search which is less then",
+            "raw": "SELECT * FROM read_parquet({data}) WHERE StartTime <= '2015-06-29T16:21' ORDER BY granuleid LIMIT 2000",
+            "source": "{data}"
         }
     ]
 }

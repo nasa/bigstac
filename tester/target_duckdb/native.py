@@ -39,9 +39,12 @@ class NativeDuckSystem(DuckDbSystem):
                     elif step.type_of == 'time':
                         where_list.append(self.generate_time(step))
 
-            where_stm = '\tAND'.join(where_list)
-            sort_stm = ''
-            if test.sortby:
-                sort_stm = f"ORDER by {test.sortby}"
-            sql = f"-- {test.description}\nSELECT *\nFROM {src}\nWHERE {where_stm}\n{sort_stm}"
+            stm_where_stm = '\tAND'.join(where_list)
+            stm_sort = f"ORDER by {test.sortby}" if test.sortby else ''
+            sql = f"""
+-- {test.description}
+SELECT {test.columns}
+FROM {src}
+WHERE {stm_where}
+{stm_sort}"""
             yield [sql, test]

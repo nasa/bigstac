@@ -102,21 +102,14 @@ class Stats():
         return json.dumps(out)
 
     def csv(self, out_file):
-        headers = [
-        'note',
-        'name',
-         'count',
-         'total',
-         'min',
-         'min-id',
-         'max',
-         'max-id',
-         'average',
-         'median',
-         'list',
-         'valid',
-         'failed'
-        ]
+        headers = []
+        for key in self.subs:
+            headers = list(self.subs[key].stats.keys())
+            break #just look at the first one, they are all the same
+        if not 'valid' in headers:
+            headers.append('valid')
+        if not 'failed' in headers:
+            headers.append('failed')
         with open(out_file, 'w', encoding="utf8") as file:
             writer = csv.DictWriter(file, fieldnames=headers)
             writer.writeheader()
@@ -129,6 +122,7 @@ class Stats():
 #print(s.max('test', 10, {'alt':3.14}))
 
 def create_a_test_stats_object():
+    # create a basic stats object for testing
     s = Stats()
     s.max('outer-test', 5)
     sub = s.get_sub("test1")

@@ -14,6 +14,9 @@ __pycache__
 # any and all directories beginning with "data" assumed to hold test data/harvester output
 **/data*
 
+**/*test*.json
+**/*test*.csv
+
 #  env files
 **/.env
 **/.env.*

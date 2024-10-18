@@ -33,26 +33,31 @@ class DuckDbSystem(target_system.TargetSystem):
         ''' Generator to produce tests specific to the system. Will call yield. '''
         for test in self.data.tests:
             src = test.source if test.source else '{data}/**/*.parquet'
-            where_list = []
-            for op in test.operations:
-                for step in op.ands:
-                    if step.type_of == 'geometry':
-                        where_list.append(self.generate_geometry(step))
-                    elif step.type_of == 'time':
-                        where_list.append(self.generate_time(step))
+            if not test.raw is None:
+                # test provides it's own sql
+                sql= test.raw
+            else:
+                # build the sql from the test config
+                where_list = []
+                for op in test.operations:
+                    for step in op.ands:
+                        if step.type_of == 'geometry':
+                            where_list.append(self.generate_geometry(step))
+                        elif step.type_of == 'time':
+                            where_list.append(self.generate_time(step))
 
-            where_stm = '\tAND'.join(where_list)
-            sort_stm = ''
-            if test.sortby:
-                sort_stm = f"ORDER by {test.sortby}"
-            sql = f"""
--- {test.description}
-SELECT *
-FROM read_parquet({src})
-WHERE {where_stm}
-{sort_stm}
-LIMIT {test.limit}"""
-            output.log.info(sql)
+                stm_where = '\tAND'.join(where_list)
+                stm_sort = f"ORDER BY {test.sortby}" if test.sortby else ''
+                stm_limit = f"LIMIT {test.limit}" if test.limit > 0 else ''
+
+                sql = f"""
+    -- {test.description}
+    SELECT {','.join(test.columns)}
+    FROM read_parquet({src})
+    WHERE {stm_where}
+    {stm_sort}
+    {stm_limit}"""
+                output.log.info(sql)
             yield [sql, test]
 
     def generate_geometry(self, step: test_config.OpType) -> str:
