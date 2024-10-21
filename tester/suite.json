@@ -6,6 +6,7 @@
         {
             "name": "test1-with-time",
             "description": "conduct an intersecting box and time based search which is then sorted",
+            "columns": ["granuleid", "geometry"],
             "operations": [
                 {
                     "ands": [
@@ -29,8 +30,9 @@
             "expected": {"action": "greater-then", "value": 11208}
         },
         {
-            "name": "test1-timeless",
+            "name": "test2-timeless",
             "description": "conduct an time based search",
+            "columns": ["granuleid", "geometry"],
             "operations": [
                 {
                     "ands": [
@@ -48,8 +50,9 @@
             "expected": {"action": "greater-then", "value": 11208}
         },
         {
-            "name": "test1-onlytime",
+            "name": "test3-onlytime",
             "description": "conduct an time based search",
+            "columns": ["granuleid", "geometry"],
             "operations": [
                 {
                     "ands": [
@@ -69,8 +72,9 @@
         },
 
         {
-            "name": "test2-onlytime",
+            "name": "test4-onlytime",
             "description": "conduct an time based search",
+            "columns": ["granuleid", "geometry"],
             "operations": [
                 {
                     "ands": [
@@ -87,8 +91,9 @@
             "source": "{data}"
         },
         {
-            "name": "test3-onlytime",
+            "name": "test5-onlytime",
             "description": "conduct an time based search which is less then",
+            "columns": ["granuleid", "geometry"],
             "operations": [
                 {
                     "ands": [
