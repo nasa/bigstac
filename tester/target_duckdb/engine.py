@@ -43,6 +43,7 @@ class DuckDbSystem(target_system.TargetSystem):
     WHERE {self.generate_where(test)}
     {self.generate_sort(test)}
     {self.generate_limit(test)}"""
+
                 output.log.info(sql)
             yield [sql, test]
 

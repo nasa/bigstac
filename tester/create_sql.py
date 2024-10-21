@@ -21,7 +21,7 @@ from target_duckdb import engine as duck
 
 def to_csv_file(out_file:str, queries:list):
     ''' Write out a CSV file with the list of queries '''
-    headers = ['name', 'action', 'sql']
+    headers = ['suite', 'name', 'action', 'sql']
     with open(out_file, 'w', encoding='utf8') as file:
         writer = csv.DictWriter(file, fieldnames=headers)
         writer.writeheader()
@@ -30,7 +30,7 @@ def to_csv_file(out_file:str, queries:list):
 
 def to_csv_string(queries: list) -> str:
     ''' Convert the list of queries to a CSV string to be printed or saved latter '''
-    headers = ['name', 'action', 'sql']
+    headers = ['suite', 'name', 'action', 'sql']
     out = io.StringIO()
     writer = csv.DictWriter(out, fieldnames=headers)
     writer.writeheader()
@@ -39,9 +39,13 @@ def to_csv_string(queries: list) -> str:
 
     return out.getvalue()
 
-def encode_csv_row(test_settings:test_config.AssessConfig, action_taken:str, sql:str) -> dict:
+def encode_csv_row(suite_name: str,
+    test_settings:test_config.AssessConfig,
+    action_taken:str,
+    sql:str) -> dict:
     ''' Create a dictionary with all the data needed to write one CSV row '''
-    row = {'name': test_settings.name,
+    row = {'suite': suite_name,
+        'name': test_settings.name,
         'action': action_taken,
         'sql': swap_select(sql, " * ").replace('\n', '\\n')}
     return row
@@ -106,17 +110,17 @@ def run(args):
         test_query = resp[0]
         test_settings = resp[1]
 
-        queries.append(encode_csv_row(test_settings, "base", test_query))
+        queries.append(encode_csv_row(config.name, test_settings, "base", test_query))
         if args.all and not 'SELECT *' in test_query:
             # add wild card case ; select everything
-            queries.append(encode_csv_row(test_settings, 'everything',
+            queries.append(encode_csv_row(config.name, test_settings, 'everything',
                 swap_select(test_query, " * ")))
         if args.order and 'ORDER BY' in test_query:
             # add an unsorted case ; no order by
-            queries.append(encode_csv_row(test_settings, 'unordered', remove_order_by(test_query)))
+            queries.append(encode_csv_row(config.name, test_settings, 'unordered', remove_order_by(test_query)))
         if args.all and args.order and not 'SELECT *' in test_query and 'ORDER BY' in test_query:
             # add an unsorted wild card case
-            queries.append(encode_csv_row(test_settings, 'everything-unordered',
+            queries.append(encode_csv_row(config.name, test_settings, 'everything-unordered',
                 remove_order_by(swap_select(test_query, " * "))))
 
     # 4. output the queries
