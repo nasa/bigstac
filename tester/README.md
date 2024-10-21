@@ -33,33 +33,25 @@ Each test also needs a `name` and an optional description.
 	* temporal & field
 	* spatial, temporal, & field
 
-Input choices:
-
-* Top level Parquet (metadata) Field 'Bounds' filtering
-* Top level Parquet (metadata) datetime Fields filtering
-* Parquet file
-	* count
-		* one per collection
-		* one per provider
-	* size
-* Parquet row count
-* Parquet Row Group size
-* Parquet grouping
-	* by location
-	* by time
-* wild cards in paths
-	* by provider
-	* by collection
-	* by partial granule id
-
-
 ## Testing Application
 
-TBD - A testing application that will convert the test configuration file into search commands specific to the search engine that is to be worked against.
+| Application   | Status | Usage
+| ------------- | ------ | ----
+| blast.py      | Draft  | A full testing app which tries to test multiple instances of duckdb
+| create_sql.py | ?      | Takes the same configuration files and generates a CSV of sql statments
+| locustfile.py | Done   | Like blast, but in locust for the bug lovers
+| run.duckdb.py | n/a    | A wrapper for use in blast
+| single.py     | Done   | Runs the configuration and generates
+| sql_tester.py | ?      | Runs a sequential list of tests from create_sql.py
+
 
 ### blast.py
 
+A testing application that will convert the test configuration file into search commands specific to the search engine that is to be worked against.
+
 This is a standalone tester which will load the configuration file, generate queries and then run those queries against the target engine (currently only duckdb). This tool may be depricated in favor of a locust test.
+
+---
 
 ### locustfile.py
 
@@ -77,6 +69,58 @@ Configuration is done via environmental variables. The Following variables are s
 | call_count | 10             | Number of times to execute query against test engine
 | test_file  | suite.json     | Search query config file
 | engine     | duckdb         | Name of the engine to test against, currently only DuckDB
+
+---
+
+### single.py
+
+	./single.py \
+		--verbose
+		--data '"../../path/to/data/*.parquet"' \
+		--note 'fastrun' \
+		suite.json \
+
+* --verbose adds output to the console
+* --data is the path to parquet file or where to start looking for them if the config file has paths
+* --note text to add to reports indicating the nature of this run
+* suite.json, no flag given, name of config file
+
+Output will be written to two files starting with the following fields in the name:
+1. an iso date and time
+2. name of the test from config file
+3. note from command line
+4. format (json and csv)
+
+For example: `2024-10-21_16-22-01-Primary_tests-fastrun.csv`
+
+---
+
+### create_sql.py and sql_tester.py
+
+These two applcations work off of the same configuration files but split up the work of generating tests and then testing them. First generate a list of statments with:
+
+	./create_sql.py --all --order suite.json > out.csv
+
+where:
+* --all, will add tests with `SELECT *` unless test already is a star select
+* --order, will add tests without order by unless test alread is missing order by
+* suite.json, no flag given, name of config file
+
+Output is CSV and can be piped to a file.
+
+To run tests use:
+
+	./sql_tester.py \
+		--data "../../path/to/data/*.parquet" \
+		--note authors-run \
+		out.csv
+
+where:
+* --data is the path to parquet file or where to start looking for them if the config file has paths
+* --note text to include in report about the run
+* out.csv, no flag given, name of config file
+
+Output will be written similar to `single.py` but to a `reports` directory so as to not get in the way of those runs.
 
 ## Findings
 
