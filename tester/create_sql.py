@@ -43,7 +43,11 @@ def encode_csv_row(suite_name: str,
     test_settings:test_config.AssessConfig,
     action_taken:str,
     sql:str) -> dict:
-    ''' Create a dictionary with all the data needed to write one CSV row '''
+    '''
+    Create a dictionary with all the data needed to write one CSV row.
+    NOTE: SQL will have newlines encoded as '\n' while in CSV and consumers will need to decode
+    these tokens for use.
+    '''
     row = {'suite': suite_name,
         'name': test_settings.name,
         'action': action_taken,
@@ -80,7 +84,7 @@ def remove_order_by(sql:str) -> str:
 #print(remove_order_by("--fix it\nSELECT column1, column2\nFROM table_name\n"))
 #sys.exit(2)
 
-def run(args):
+def run(args:argparse.Namespace):
     '''
     Handle the script tasks in 4 steps:
     1. Parse configuration
@@ -101,6 +105,9 @@ def run(args):
     engine = None
     if args.system == 'duckdb':
         engine = duck.DuckDbSystem()
+    else:
+        output.error("Unknown system name.")
+        sys.exit(2)
 
     # 3. create search query as generator
     engine.use_configuration(config)

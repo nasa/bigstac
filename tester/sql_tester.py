@@ -63,7 +63,7 @@ def run_one_test(engine:duck, args:argparse.Namespace, stat:stats.Stats, data:di
     return out #give the last one back so there is something to work with in the caller
 
 
-def run(args):
+def run(args:argparse.Namespace):
     '''
     Run the steps of the script:
     1. Parse configuration
@@ -77,7 +77,7 @@ def run(args):
         output.error("No configuration file provided.")
         sys.exit(1)
 
-    data = None
+    data = None # Decoded CSV rows
     if args.config:
         with open(args.config, 'r', encoding='utf-8') as file:
             # Assuming 'file' is a file object opened in read mode
@@ -92,12 +92,16 @@ def run(args):
     engine = None
     if args.system == 'duckdb':
         engine = duck.DuckDbSystem()
+    else:
+        output.error("Unknown system name.")
+        sys.exit(2)
 
     # 3. run the tests in each row
     stat = stats.Stats()
-    suite_name = data[0]["suite"]
-    output.log.critical("Starting test run: %s - %s...", args.note, suite_name)
+    suite_name = data[0]["suite"] # this column should be the same for all rows
+    output.log.critical("Starting test run: %s - %s...", suite_name, args.note)
     for row in data:
+        # NOTE: need to decode SQL from CSV: replace \n with newline
         sql = row['sql'].replace('\\n', '\n')
         row['sql'] = sql
         run_one_test(engine, args, stat, row)
