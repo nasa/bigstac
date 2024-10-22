@@ -135,7 +135,7 @@ def run(args):
 
 def handle_args() -> argparse.Namespace:
     ''' Process all the command line arguments and return an argparse Namespace object. '''
-    parser = argparse.ArgumentParser(description="Description of your script")
+    parser = argparse.ArgumentParser(description="Generates a list of sql commands to be tested.")
 
     # Add command-line arguments
     parser.add_argument("config", help='Path to configuration file.')

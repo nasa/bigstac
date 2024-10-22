@@ -73,14 +73,19 @@ def run(args):
     '''
 
     # 1. Parse configuration
-    if args.config is None:
+    if args.config is None and sys.stdin.isatty():
         output.error("No configuration file provided.")
         sys.exit(1)
 
     data = None
-    with open(args.config, 'r', encoding='utf-8') as file:
-        # Assuming 'file' is a file object opened in read mode
-        csv_reader = csv.DictReader(file)
+    if args.config:
+        with open(args.config, 'r', encoding='utf-8') as file:
+            # Assuming 'file' is a file object opened in read mode
+            csv_reader = csv.DictReader(file)
+            data = list(csv_reader)
+    else:
+        # read from standard in
+        csv_reader = csv.DictReader(sys.stdin)
         data = list(csv_reader)
 
     # 2. select test target engine
@@ -110,10 +115,10 @@ def run(args):
 
 def handle_args() -> argparse.Namespace:
     ''' Process all the command line arguments and return an argparse Namespace object. '''
-    parser = argparse.ArgumentParser(description="Description of your script")
+    parser = argparse.ArgumentParser(description="Accept a CSV of sql commands that are tested.")
 
     # Add command-line arguments
-    parser.add_argument("config", help='Path to csv input file.')
+    parser.add_argument("--config", required=False, help='Path to csv input file.')
     parser.add_argument("-d", "--data",
         help='Path to data files which goes into {data}. Include any quotes or [] as needed')
 

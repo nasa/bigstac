@@ -112,8 +112,8 @@ To run tests use:
 
 	./sql_tester.py \
 		--data "../../path/to/data/*.parquet" \
-		--note authors-run \
-		out.csv
+		--note run-one \
+		--config out.csv
 
 where:
 * --data is the path to parquet file or where to start looking for them if the config file has paths
@@ -121,6 +121,11 @@ where:
 * out.csv, no flag given, name of config file
 
 Output will be written similar to `single.py` but to a `reports` directory so as to not get in the way of those runs.
+
+Both scripts can be run together:
+
+	./create_sql.py suite.json --all --order | \
+		./sql_tester.py --data '"../../path/to/data/*.parquet"' --note run-two
 
 ## Findings
 
