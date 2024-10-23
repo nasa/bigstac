@@ -140,7 +140,6 @@ def run(args:argparse.Namespace):
     # 4. output the queries
     if args.data:
         to_csv_file(args.data, queries)
-        print('data')
     else:
         print(to_csv_string(queries), end=None)
 
@@ -162,9 +161,7 @@ def handle_args() -> argparse.Namespace:
     parser.add_argument("-l", '--log-level', default='info',
         choices=['debug', 'info', 'warning', 'error', 'critical'],
         help='Set the logging level, default is info')
-
-    parser.add_argument("-s", "--system", default='duckdb',
-        help="engine to test, duckdb")
+    parser.add_argument("-s", "--system", default='duckdb', help="engine to test, duckdb")
 
     # Parse arguments
     args = parser.parse_args()
