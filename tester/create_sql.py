@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 
 '''
-Take the test config file and generate a list of sql statments. In some cases new sql statments will
-be created based on the current ones to expand out the test cases, such as making sure that there is
-always a matching SELECT * version of all queries, or an unsorted (dropping ORDER BY).
+Take the test config file and generate a list of sql statements. In some cases new sql statements
+will be created based on the current ones to expand out the test cases, such as making sure that
+there is always a matching SELECT * version of all queries, or an unsorted (dropping ORDER BY).
+
+example run:
+
+./create_sql.py suite.json --all --order > out.csv
 '''
 
 import argparse
@@ -155,6 +159,9 @@ def handle_args() -> argparse.Namespace:
         help='Add ORDER BY check, adding queries without one if found.')
     parser.add_argument("-a", "--all", action='store_true',
         help='Add all "*" check, adding queries if SELECT * is not used.')
+    parser.add_argument("-l", '--log-level', default='info',
+        choices=['debug', 'info', 'warning', 'error', 'critical'],
+        help='Set the logging level, default is info')
 
     parser.add_argument("-s", "--system", default='duckdb',
         help="engine to test, duckdb")
@@ -167,6 +174,9 @@ def main():
     ''' Be a command line app. '''
     output.init_logging(__file__)
     args = handle_args()
+
+    output.set_log_level(args.log_level)
+
     run(args)
 
 if __name__ == "__main__":

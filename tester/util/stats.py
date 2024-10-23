@@ -101,10 +101,20 @@ class Stats():
             out['tests'].append(item)
         return json.dumps(out)
 
+    def _sort_csv_headers(self, headers:list)->list:
+        ''' note and name are row identifiers, put this first, but all others sort normally. '''
+        priority_headers = ['note', 'name']
+        for header in priority_headers:
+            headers.remove(header)
+        headers.sort()
+        headers = priority_headers + headers
+        return headers
+
     def csv(self, out_file):
+        ''' Write out the stats to a csv file. '''
         headers = []
         for key in self.subs:
-            headers = list(self.subs[key].stats.keys())
+            headers = self._sort_csv_headers(list(self.subs[key].stats.keys()))
             break #just look at the first one, they are all the same
         if not 'valid' in headers:
             headers.append('valid')
@@ -117,6 +127,9 @@ class Stats():
                 data = self.subs[sub].stats.copy()
                 data['name'] = sub
                 writer.writerow(data)
+
+# ################################################################################################ #
+# testing
 
 #s = Stats()
 #print(s.max('test', 10, {'alt':3.14}))

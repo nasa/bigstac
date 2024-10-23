@@ -8,6 +8,7 @@
     {
       "name": "California_bbox-SortBy_granuleid",
       "description": "intersect with California bounding box + sort",
+      "columns": ["granuleid"],
       "operations": [
         {
           "ands": [
@@ -26,6 +27,7 @@
     {
       "name": "California_bbox-time_Since2020-SortBy_granuleid",
       "description": "intersect with California bounding box + time since 2020 + sort",
+      "columns": ["granuleid"],
       "operations": [
         {
           "ands": [
@@ -50,6 +52,7 @@
     {
       "name": "California_simplified-SortBy_granuleid",
       "description": "intersect with California, simplified geometry + sort",
+      "columns": ["granuleid"],
       "operations": [
         {
           "ands": [
@@ -68,6 +71,7 @@
     {
       "name": "time_Since2020-SortBy_granuleid",
       "description": "time since 2020 + sort",
+      "columns": ["granuleid"],
       "operations": [
         {
           "ands": [

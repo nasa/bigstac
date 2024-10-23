@@ -19,6 +19,23 @@ def init_logging(file_name):
     logging.basicConfig(filename=f"{os.path.basename(file_name)}.log", level=logging.INFO)
     log = logging.getLogger(os.path.basename(file_name) + '.log')
 
+def set_log_level(level_name:str):
+    ''' Change the log level at run time. '''
+    if level_name:
+        match level_name:
+            case "debug":
+                log.setLevel(logging.DEBUG)
+            case "info":
+                log.setLevel(logging.INFO)
+            case "warning":
+                log.setLevel(logging.WARNING)
+            case "error":
+                log.setLevel(logging.ERROR)
+            case "critical":
+                log.setLevel(logging.CRITICAL)
+            case _:
+                log.setLevel(logging.INFO)
+
 def error(msg):
     ''' Print out an error message. '''
     print(red(msg))
