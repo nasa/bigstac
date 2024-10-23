@@ -15,6 +15,7 @@ import sys
 from util import output
 from util import test_config
 from target_duckdb import engine as duck
+from target_duckdb import native as mallard
 
 # ################################################################################################ #
 # Mark: - Functions
@@ -105,6 +106,8 @@ def run(args:argparse.Namespace):
     engine = None
     if args.system == 'duckdb':
         engine = duck.DuckDbSystem()
+    elif args.system == 'mallard': # duckdb using a native database ; Mallards are native to America
+        engine = mallard.NativeDuckSystem("")
     else:
         output.error("Unknown system name.")
         sys.exit(2)

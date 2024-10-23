@@ -25,6 +25,7 @@ from util import stats
 from util import tools
 
 from target_duckdb import engine as duck
+from target_duckdb import native as mallard
 
 # ################################################################################################ #
 # Mark: - Functions
@@ -92,6 +93,9 @@ def run(args:argparse.Namespace):
     engine = None
     if args.system == 'duckdb':
         engine = duck.DuckDbSystem()
+    elif args.system == 'mallard': # duckdb using a native database ; Mallards are native to America
+        # not well tested at this point (2024-10-18)
+        engine = mallard.NativeDuckSystem(args.database)
     else:
         output.error("Unknown system name.")
         sys.exit(2)
@@ -124,13 +128,14 @@ def handle_args() -> argparse.Namespace:
     # Add command-line arguments
     parser.add_argument("--config", required=False, help='Path to csv input file.')
     parser.add_argument("-d", "--data",
-        help='Path to data files which goes into {data}. Include any quotes or [] as needed')
-
+        help='Path to data files or name of DuckDB table which goes into {data}. Include any quotes or [] as needed')
     parser.add_argument("-n", "--note", default='normal',
         help='give a note about this specific run.')
     parser.add_argument("-t", "--tries", default='8', type=int,
         help="Number of times to run a test.")
     parser.add_argument("-s", "--system", default='duckdb', help="engine to test, duckdb")
+    parser.add_argument("-b", "--database", default='~/test_lpcloud_data/single_file/native.db',
+        help="path to DuckDB database")
 
     # Parse arguments
     args = parser.parse_args()

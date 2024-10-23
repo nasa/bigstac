@@ -10,6 +10,7 @@ share
 __pycache__
 .DS_Store
 .vscode
+*.db
 
 # any and all directories beginning with "data" assumed to hold test data/harvester output
 **/data*
