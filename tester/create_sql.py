@@ -50,7 +50,7 @@ def to_csv_string(queries: list) -> str:
 def assert_something(target: Callable[[str], str], msg: str, expected:str, given:str):
     '''
     A very basic wrapper around assert for some basic testing. Compare the expected and actual
-    values and print a message if they are not equal.
+    values and print a message if they are not equal. Given values are run through target first.
     '''
     actual = target(given)
     assert expected == actual, f'💣 {msg}: expected [{expected}] but got [{actual}]!'
@@ -69,6 +69,46 @@ def encode_csv_row(suite_name: str,
         'action': action_taken,
         'sql': sql.replace('\n', '\\n')}
     return row
+
+# ##################################################
+
+def swap_limit(limit:int, sql:str) -> str:
+    '''
+    Replace the LIMIT clause with the supplied value. If there is not a valid limit value, then drop
+    the SQL LIMIT clause.
+    '''
+    new_query = sql
+    if 'LIMIT' in sql:
+        if limit < 1:
+            #drop limit
+            new_query = re.sub(r'\sLIMIT\s+\d+', '', sql, flags=re.IGNORECASE)
+        else:
+            # augment limit
+            pattern = r'(?<=\bLIMIT)\b\s*\d+'
+            new_query = re.sub(pattern, ' ' + str(limit), sql, flags=re.IGNORECASE)
+    return new_query
+
+# Do some inline testing on a few cases
+# test_swap_limit is a tester for swap_limit
+test_swap_limit = functools.partial(assert_something, functools.partial(swap_limit, 128))
+test_swap_limit('Basic limit swap',
+    'SELECT * FROM table_name WHERE condition LIMIT 128',
+    'SELECT * FROM table_name WHERE condition LIMIT 10')
+test_swap_limit('Limit swap with no limit',
+    'SELECT * FROM table_name WHERE condition',
+    'SELECT * FROM table_name WHERE condition')
+test_swap_limit('Limit swap with no limit and order by',
+    'SELECT * FROM table_name WHERE condition ORDER BY foo LIMIT 128',
+    'SELECT * FROM table_name WHERE condition ORDER BY foo LIMIT 10')
+test_swap_limit('Limit swap with no limit and order by and limit',
+    'SELECT * FROM table_name WHERE condition ORDER BY foo LIMIT 128',
+    'SELECT * FROM table_name WHERE condition ORDER BY foo LIMIT 10')
+test_drop_limit = functools.partial(assert_something, functools.partial(swap_limit, -1))
+test_drop_limit('Drop limit Limit swap with no limit and order by and limit',
+    'SELECT * FROM table_name WHERE condition ORDER BY foo',
+    'SELECT * FROM table_name WHERE condition ORDER BY foo LIMIT 10')
+
+# ##################################################
 
 def swap_select(sql:str, replacement:str = ' * ') -> str:
     ''' Replace the select clause with the replacement string if it is the SELECT * query. '''
@@ -98,11 +138,13 @@ assert_something(lambda x: swap_select(x, " x\n"),
     "--no change\nSELECT *\nFROM\ntable_name\nWHERE condition",
     "--no change\nSELECT *\nFROM\ntable_name\nWHERE condition")
 
+# ##################################################
+
 def remove_order_by(sql:str) -> str:
     ''' Remove the order by clause from the sql statement '''
     if 'ORDER BY' in sql:
         # pylint: disable=line-too-long
-        pattern = r'\bORDER\s+BY\s+.*?(?=\b(LIMIT|OFFSET|FETCH|FOR|UNION|INTERSECT|EXCEPT|;\s*$|\Z))'
+        pattern = r'\bORDER\s+BY\s+.*?(?=\b(LIMIT|OFFSET|FETCH|FOR|UNION|INTERSECT|EXCEPT)\b|;\s*$|\Z|$)'
         new_query = re.sub(pattern, '', sql, flags=re.IGNORECASE | re.DOTALL)
         return new_query.strip()
     return sql
@@ -122,6 +164,8 @@ test_remove_order_by('failed 3',
 test_remove_order_by('failed4',
     "--fix it\nSELECT column1, column2\nFROM table_name\n",
     "--fix it\nSELECT column1, column2\nFROM table_name\n")
+
+# ##################################################
 
 def run(args:argparse.Namespace):
     '''
@@ -158,19 +202,36 @@ def run(args:argparse.Namespace):
         test_query = resp[0]
         test_settings = resp[1]
 
-        queries.append(encode_csv_row(config.name, test_settings, "base", test_query))
-        if args.all and not 'SELECT *' in test_query:
-            # add wild card case ; select everything
-            queries.append(encode_csv_row(config.name, test_settings, 'everything',
-                swap_select(test_query)))
-        if args.order and 'ORDER BY' in test_query:
-            # add an unsorted case ; no order by
-            queries.append(encode_csv_row(config.name, test_settings, 'unordered',
-                remove_order_by(test_query)))
-        if args.all and args.order and not 'SELECT *' in test_query and 'ORDER BY' in test_query:
-            # add an unsorted wild card case
-            queries.append(encode_csv_row(config.name, test_settings, 'everything-unordered',
-                remove_order_by(swap_select(test_query))))
+        if not args.no_orig:
+            queries.append(encode_csv_row(config.name, test_settings, "base", test_query))
+
+        # set bit flag as such Limit-Order-All
+        flags = (4 if args.limit else 0) | (2 if args.order else 0) | (1 if args.all else 0)
+        added = [] # list of flag combinations added for this round of tests
+
+        # try every combination from 001 to 111 but ignore the ones not selected with flags
+        # thus the flag & (flag & number) test
+        for flag in range(1, 8):
+            current_query = test_query
+            flag_name = ''
+            if flags & (flag & 4):
+                flag_name = flag_name + "-limit"
+                current_query = swap_limit(args.limit, current_query)
+            if flags & (flag & 2):
+                flag_name = flag_name + "-orderless"
+                current_query = remove_order_by(current_query)
+            if flags & (flag & 1):
+                flag_name = flag_name + "-all"
+                current_query = swap_select(current_query)
+
+            if flag_name:
+                if flag_name in added:
+                    continue # only add each combination once
+                added.append(flag_name)
+                flag_tag = f"{test_settings.name} flag-{flag}{flag_name}"
+                output.log.debug(flag_tag)
+
+                queries.append(encode_csv_row(config.name, test_settings, flag_tag, current_query))
 
     # 4. output the queries
     if args.data:
@@ -189,11 +250,15 @@ def handle_args() -> argparse.Namespace:
     parser.add_argument("config", help='Path to configuration file.')
     parser.add_argument("-d", "--data",
         help='Name of the csv file to write out.')
+    parser.add_argument('-N', '--no-orig', action='store_true',
+        help='Drop the original sql query in favor of the others')
     parser.add_argument('-o', '--order', action='store_true',
         help='Add ORDER BY check, adding queries without one if found.')
     parser.add_argument("-a", "--all", action='store_true',
         help='Add all "*" check, adding queries if SELECT * is not used.')
-    parser.add_argument("-l", '--log-level', default='info',
+    parser.add_argument('-l', '--limit' , type=int,
+        help='Limit the number of queries to generate.')
+    parser.add_argument("-v", '--verbose-level', default='info',
         choices=['debug', 'info', 'warning', 'error', 'critical'],
         help='Set the logging level, default is info')
     parser.add_argument("-s", "--system", default='duckdb', help="engine to test, duckdb")
@@ -207,7 +272,7 @@ def main():
     output.init_logging(__file__)
     args = handle_args()
 
-    output.set_log_level(args.log_level)
+    output.set_log_level(args.verbose_level)
 
     run(args)
 
