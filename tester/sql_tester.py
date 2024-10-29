@@ -65,7 +65,6 @@ def run_one_test(engine:duck, args:argparse.Namespace, stat:stats.Stats, data:di
     out = str(len(out))
     return out #give the last one back so there is something to work with in the caller
 
-
 def run(args:argparse.Namespace):
     '''
     Run the steps of the script:
@@ -75,9 +74,11 @@ def run(args:argparse.Namespace):
     4. Write out the results
     '''
 
+    mark_start = int(time.time() * 1000)
+
     # 1. Parse configuration
     if args.config is None and sys.stdin.isatty():
-        output.error("No configuration file provided.")
+        output.log.critical("No configuration file provided.")
         sys.exit(1)
 
     data = None # Decoded CSV rows
@@ -104,8 +105,11 @@ def run(args:argparse.Namespace):
 
     # 3. run the tests in each row
     stat = stats.Stats()
+    if not 'suite' in data[0]:
+        output.log.critical("No 'suite' column in CSV file.")
+        sys.exit(3)
     suite_name = data[0]["suite"] # this column should be the same for all rows
-    output.log.critical("Starting test run: %s - %s...", suite_name, args.note)
+    output.log.log(output.LOG_ALWAYS, "Starting test run: [%s - %s]...", suite_name, args.note)
     for row in data:
         # NOTE: need to decode SQL from CSV: replace \n with newline
         sql = row['sql'].replace('\\n', '\n')
@@ -118,6 +122,13 @@ def run(args:argparse.Namespace):
     filer.write(stat.dump(), f"{base_name}.json")
     stat.csv(f"{base_name}.csv")
 
+    mark_stop = int(time.time() * 1000)
+
+    output.log.log(output.LOG_ALWAYS,
+        "Test [%s - %s] completed in %dms.",
+        suite_name,
+        args.note,
+        mark_stop-mark_start)
     output.log.info("#"*57)
 
 # ################################################################################################ #
@@ -130,7 +141,8 @@ def handle_args() -> argparse.Namespace:
     # Add command-line arguments
     parser.add_argument('-c', "--config", required=False, help='Path to csv input file.')
     parser.add_argument("-d", "--data",
-        help='Path to data files or name of DuckDB table which goes into {data}. Include any quotes or [] as needed')
+        help='''Path to data files or name of DuckDB table which goes into {data}.
+Include any quotes or [] as needed'''.replace('\n', ' '))
     parser.add_argument("-n", "--note", default='normal',
         help='give a note about this specific run.')
     parser.add_argument("-t", "--tries", default='8', type=int,
@@ -138,7 +150,7 @@ def handle_args() -> argparse.Namespace:
     parser.add_argument("-s", "--system", default='duckdb', help="engine to test, duckdb")
     parser.add_argument("-b", "--database", default='~/test_lpcloud_data/single_file/native.db',
         help="path to DuckDB database")
-    parser.add_argument("-l", '--log-level', default='info',
+    parser.add_argument("-v", '--verbose-level', default='info',
         choices=['debug', 'info', 'warning', 'error', 'critical'],
         help='Set the logging level, default is info')
 
@@ -151,7 +163,7 @@ def main():
     output.init_logging(__file__)
     args = handle_args()
 
-    output.set_log_level(args.log_level)
+    output.set_log_level(args.verbose_level)
 
     run(args)
 

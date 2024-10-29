@@ -12,6 +12,8 @@ thread_info = {} # mapping of thread ids to thread counts starting at 0
 #pylint: disable=invalid-name
 log = None
 
+LOG_ALWAYS = 99
+
 def init_logging(file_name):
     ''' Setup logging '''
     #pylint: disable=global-statement
