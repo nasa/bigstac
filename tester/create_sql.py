@@ -15,6 +15,9 @@ import csv
 import io
 import re
 import sys
+from typing import Callable
+import functools
+
 
 from util import output
 from util import test_config
@@ -44,6 +47,14 @@ def to_csv_string(queries: list) -> str:
 
     return out.getvalue()
 
+def assert_something(target: Callable[[str], str], msg: str, expected:str, given:str):
+    '''
+    A very basic wrapper around assert for some basic testing. Compare the expected and actual
+    values and print a message if they are not equal.
+    '''
+    actual = target(given)
+    assert expected == actual, f'💣 {msg}: expected [{expected}] but got [{actual}]!'
+
 def encode_csv_row(suite_name: str,
     test_settings:test_config.AssessConfig,
     action_taken:str,
@@ -56,10 +67,10 @@ def encode_csv_row(suite_name: str,
     row = {'suite': suite_name,
         'name': test_settings.name,
         'action': action_taken,
-        'sql': swap_select(sql, " * ").replace('\n', '\\n')}
+        'sql': sql.replace('\n', '\\n')}
     return row
 
-def swap_select(sql:str, replacement:str) -> str:
+def swap_select(sql:str, replacement:str = ' * ') -> str:
     ''' Replace the select clause with the replacement string if it is the SELECT * query. '''
     if not 'SELECT *' in sql:
         pattern = r'(?<=\bSELECT\b).*?\s*(?=\bFROM\b)'
@@ -68,26 +79,49 @@ def swap_select(sql:str, replacement:str) -> str:
         return new_query
     return sql
 
-#print(swap_select("SELECT column1, column2 FROM table_name WHERE condition", " * "))
-#print(swap_select("SELECT * FROM table_name WHERE condition", " * "))
-#print(swap_select("--fix it\nSELECT column1, column2\nFROM table_name\nWHERE condition\n", " *\n"))
-#print(swap_select("--no change\nSELECT *\nFROM\ntable_name\nWHERE condition", "x\n"))
-#sys.exit(2)
+# Do some inline testing on a few cases
+# test_swap_select is the most basic of test cases
+test_swap_select = functools.partial(assert_something, swap_select)
+test_swap_select('Basic select swap',
+    'SELECT * FROM table_name WHERE condition',
+    'SELECT column1, column2 FROM table_name WHERE condition')
+test_swap_select("Select swap was already a star",
+    "SELECT * FROM table_name WHERE condition",
+    "SELECT * FROM table_name WHERE condition")
+# change up the default swap token
+assert_something(lambda x: swap_select(x, " *\n"),
+    "New Line after star in select swap",
+    "--fix it\nSELECT *\nFROM table_name\nWHERE condition\n",
+    "--fix it\nSELECT column1, column2\nFROM table_name\nWHERE condition\n")
+assert_something(lambda x: swap_select(x, " x\n"),
+    'Match nothing, change nothing in select swap',
+    "--no change\nSELECT *\nFROM\ntable_name\nWHERE condition",
+    "--no change\nSELECT *\nFROM\ntable_name\nWHERE condition")
 
 def remove_order_by(sql:str) -> str:
     ''' Remove the order by clause from the sql statement '''
     if 'ORDER BY' in sql:
         # pylint: disable=line-too-long
         pattern = r'\bORDER\s+BY\s+.*?(?=\b(LIMIT|OFFSET|FETCH|FOR|UNION|INTERSECT|EXCEPT|;\s*$|\Z))'
-        new_query = re.sub(pattern, '', sql, flags=re.IGNORECASE)
-        return new_query
+        new_query = re.sub(pattern, '', sql, flags=re.IGNORECASE | re.DOTALL)
+        return new_query.strip()
     return sql
 
-#print(remove_order_by("SELECT c1, c2 FROM table_name WHERE condition ORDER BY column1 LIMIT 100"))
-#print(remove_order_by("SELECT column1, column2 FROM table_name WHERE condition ORDER BY column1"))
-#print(remove_order_by("SELECT column1, column2 FROM table_name WHERE condition"))
-#print(remove_order_by("--fix it\nSELECT column1, column2\nFROM table_name\n"))
-#sys.exit(2)
+# Do some inline testing on a few cases
+# test_remove_order_by is the basic test case
+test_remove_order_by = functools.partial(assert_something, remove_order_by)
+test_remove_order_by('failed 1',
+    "SELECT c1, c2 FROM table_name WHERE condition LIMIT 100",
+    "SELECT c1, c2 FROM table_name WHERE condition ORDER BY column1 LIMIT 100")
+test_remove_order_by('failed 2',
+    "SELECT column1, column2 FROM table_name WHERE condition",
+    "SELECT column1, column2 FROM table_name WHERE condition ORDER BY column1")
+test_remove_order_by('failed 3',
+    "SELECT column1, column2 FROM table_name WHERE condition",
+    "SELECT column1, column2 FROM table_name WHERE condition")
+test_remove_order_by('failed4',
+    "--fix it\nSELECT column1, column2\nFROM table_name\n",
+    "--fix it\nSELECT column1, column2\nFROM table_name\n")
 
 def run(args:argparse.Namespace):
     '''
@@ -128,14 +162,15 @@ def run(args:argparse.Namespace):
         if args.all and not 'SELECT *' in test_query:
             # add wild card case ; select everything
             queries.append(encode_csv_row(config.name, test_settings, 'everything',
-                swap_select(test_query, " * ")))
+                swap_select(test_query)))
         if args.order and 'ORDER BY' in test_query:
             # add an unsorted case ; no order by
-            queries.append(encode_csv_row(config.name, test_settings, 'unordered', remove_order_by(test_query)))
+            queries.append(encode_csv_row(config.name, test_settings, 'unordered',
+                remove_order_by(test_query)))
         if args.all and args.order and not 'SELECT *' in test_query and 'ORDER BY' in test_query:
             # add an unsorted wild card case
             queries.append(encode_csv_row(config.name, test_settings, 'everything-unordered',
-                remove_order_by(swap_select(test_query, " * "))))
+                remove_order_by(swap_select(test_query))))
 
     # 4. output the queries
     if args.data:
