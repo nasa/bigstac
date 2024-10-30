@@ -17,10 +17,10 @@ import duckdb
 
 #pylint: disable=broad-exception-caught
 
-def access_keys() -> tuple[str, str]:
+def access_keys(credentials_file:str) -> tuple[str, str]:
     ''' Get access keys from AWS credentials file. '''
     config = configparser.ConfigParser()
-    config.read(os.path.expanduser('~/.aws/credentials'))
+    config.read(os.path.expanduser(credentials_file))
     access_key = config.get('cmr-sit', 'aws_access_key_id')
     secret_access_key = config.get('cmr-sit', 'aws_secret_access_key')
     return access_key, secret_access_key
@@ -66,7 +66,7 @@ def run(args: argparse.Namespace):
     connection.load_extension("spatial")
 
     # 2. use access keys from AWS credentials file
-    key_id, access_key = access_keys()
+    key_id, access_key = access_keys(args.credentials)
     connection.execute(f'''create secret secret1(
         TYPE S3,
         KEY_ID '{key_id}',
@@ -75,15 +75,17 @@ def run(args: argparse.Namespace):
 
     # 3. run the query
     try:
+        #--set enable_profiling = 'json' ;
         result = connection.sql(f'''
             PRAGMA enable_profiling ;
-            --set enable_profiling = 'json' ;
             EXPLAIN ANALYZE
+            -- test
             SELECT *
             FROM '{args.parquet}'
             WHERE starttime > '2023-01-01'
             LIMIT 10;
         ''')
+        #--PRAGMA profiling_summary ;
         details = str(result.fetchall())
     except Exception as e:
         print(e)
@@ -99,6 +101,8 @@ def handle_args() -> argparse.Namespace:
 
     # Add command-line arguments
     parser.add_argument("parquet", help='Path to configuration file.')
+    parser.add_argument('-c', '--credentials', default="~/.aws/credentials",
+        help="Path to the aws credentials file.")
 
     # Parse arguments
     args = parser.parse_args()

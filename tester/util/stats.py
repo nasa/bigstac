@@ -51,6 +51,7 @@ class Stats():
         self.stats[name].append(value)
 
     def value(self, value:int|float, data:str = None):
+        ''' Add several standard stats '''
         self.add('count', 1)
         self.add('total', value)
         self.min('min', value, {'min-id': data} if data else None)

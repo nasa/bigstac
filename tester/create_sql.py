@@ -5,6 +5,9 @@ Take the test config file and generate a list of sql statements. In some cases n
 will be created based on the current ones to expand out the test cases, such as making sure that
 there is always a matching SELECT * version of all queries, or an unsorted (dropping ORDER BY).
 
+NOTE: As a feature this code only operates on SQL statements that are in upper case. If it is needed
+to prevent a query from being modified, use lowercase and the regular expressions will not trigger.
+
 example run:
 
 ./create_sql.py suite.json --all --order > out.csv
@@ -18,7 +21,6 @@ import sys
 from typing import Callable
 import functools
 
-
 from util import output
 from util import test_config
 from target_duckdb import engine as duck
@@ -26,6 +28,18 @@ from target_duckdb import native as mallard
 
 # ################################################################################################ #
 # Mark: - Functions
+
+def select_engine(system_name:str) -> duck:
+    ''' Select the engine to use for the test suite '''
+    engine = None
+    if system_name == 'duckdb':
+        engine = duck.DuckDbSystem()
+    elif system_name == 'mallard': # duckdb using a native database ; Mallards are native to America
+        engine = mallard.NativeDuckSystem("")
+    else:
+        output.error("Unknown system name.")
+        sys.exit(2)
+    return engine
 
 def to_csv_file(out_file:str, queries:list):
     ''' Write out a CSV file with the list of queries '''
@@ -172,38 +186,26 @@ def run(args:argparse.Namespace):
     Handle the script tasks in 4 steps:
     1. Parse configuration
     2. Select test target engine
-    3. Create search query as generator
+    3. Create search query from generator
     4. Output the queries
     '''
 
     # 1. Parse configuration
-    if args.config is None:
-        output.error("No configuration file provided.")
-        sys.exit(1)
     config = test_config.from_file(args.config)
-
-    output.log.critical("Starting sql dump: %s - %s.", "", config.name)
+    output.log.log(output.LOG_ALWAYS, "Starting create sql: %s.", config.name)
 
     # 2. select test target engine
-    engine = None
-    if args.system == 'duckdb':
-        engine = duck.DuckDbSystem()
-    elif args.system == 'mallard': # duckdb using a native database ; Mallards are native to America
-        engine = mallard.NativeDuckSystem("")
-    else:
-        output.error("Unknown system name.")
-        sys.exit(2)
-
-    # 3. create search query as generator
+    engine = select_engine(args.system)
     engine.use_configuration(config)
 
+    # 3. Create search query from generator
     queries = []
     for resp in engine.generate_tests():
         test_query = resp[0]
         test_settings = resp[1]
 
         if not args.no_orig:
-            queries.append(encode_csv_row(config.name, test_settings, "base", test_query))
+            queries.append(encode_csv_row(config.name, test_settings, "flag-0-base", test_query))
 
         # set bit flag as such Limit-Order-All
         flags = (4 if args.limit else 0) | (2 if args.order else 0) | (1 if args.all else 0)
@@ -215,7 +217,7 @@ def run(args:argparse.Namespace):
             current_query = test_query
             flag_name = ''
             if flags & (flag & 4):
-                flag_name = flag_name + "-limit"
+                flag_name = flag_name + f"-limit:{args.limit}"
                 current_query = swap_limit(args.limit, current_query)
             if flags & (flag & 2):
                 flag_name = flag_name + "-orderless"
@@ -228,7 +230,7 @@ def run(args:argparse.Namespace):
                 if flag_name in added:
                     continue # only add each combination once
                 added.append(flag_name)
-                flag_tag = f"{test_settings.name} flag-{flag}{flag_name}"
+                flag_tag = f"flag-{flag}{flag_name}"
                 output.log.debug(flag_tag)
 
                 queries.append(encode_csv_row(config.name, test_settings, flag_tag, current_query))

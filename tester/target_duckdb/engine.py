@@ -8,7 +8,7 @@ import duckdb
 from util import target_system
 from util import test_config
 from util import output
-
+from . import tools
 
 # SELECT
 #  geometry as geometry_duckdb,
@@ -21,6 +21,7 @@ class DuckDbSystem(target_system.TargetSystem):
     ''' Base system '''
 
     connection: None
+    has_credentials: bool = False
 
     def __init__(self):
         self.connection = duckdb.connect()
@@ -138,3 +139,26 @@ class DuckDbSystem(target_system.TargetSystem):
 
     def give_to_each_user(self):
         return self.connection
+
+    def send_credentials(self, file_path:str) -> bool:
+        ''' Add AWS credentials so that S3 buckets can be accessed. '''
+        if not self.has_credentials:
+            self.has_credentials = True
+            ans = self.connection.execute(tools.create_secret(file_path)).fetchall()
+            return ans and ans[0][0]
+        return False
+
+    def http_stats(self, sql:str) -> dict:
+        ''' Run a sql query and return the HTTP stats of the query '''
+
+        command = f'''
+            PRAGMA enable_profiling ;
+            EXPLAIN ANALYZE
+            {sql} ;
+        '''
+        #PRAGMA disable_profiling ;
+        #--PRAGMA profiling_summary ;
+        details = str(self.connection.sql(command).fetchall())
+        self.connection.sql(f'PRAGMA disable_profiling ;')
+        stats = tools.parse_http_stats(details)
+        return stats
