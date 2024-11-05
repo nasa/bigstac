@@ -26,6 +26,11 @@ def shape(parquet:pd.DataFrame):
     #print('Columns')
     #print(parquet.columns)
 
+def big_shape(parquet_path:str):
+    parquet_obj = pq.ParquetFile(parquet_path)
+    print(str(type(parquet_obj)))
+    print(parquet_obj.metadata.row_group(0).num_rows)
+
 # ################################################################################################ #
 
 
@@ -35,8 +40,10 @@ def run(args: argparse.Namespace):
         for rep in args.reports:
             if rep == 'shape':
                 print(f"about to run shape report for {args.parquet}")
-                parquet = pd.read_parquet(args.parquet, engine='pyarrow')
+                parquet = pd.read_parquet(args.parquet, engine='pyarrow', memory_map=True)
                 shape(parquet)
+            elif rep =='shape-big':
+                big_shape(args.parquet)
 
 # ################################################################################################ #
 # Mark: - Command functions
@@ -48,7 +55,7 @@ def handle_args() -> argparse.Namespace:
     # Add command-line arguments
     parser.add_argument("parquet", help='Path to parquet file.')
     parser.add_argument("-r", "--reports",
-        choices=['shape'],
+        choices=['shape', 'shape-big'],
         nargs="+",
         help='Name of the csv file to write out.')
 
