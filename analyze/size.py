@@ -20,6 +20,7 @@ from shapely.geometry import box
 
 def shape(parquet:pd.DataFrame):
     ''' rows and column info about the file '''
+    print("running shape report")
     print(parquet.shape)
     #print('-'*80)
     #print('Columns')
@@ -33,6 +34,7 @@ def run(args: argparse.Namespace):
     if args.reports:
         for rep in args.reports:
             if rep == 'shape':
+                print(f"about to run shape report for {args.parquet}")
                 parquet = pd.read_parquet(args.parquet, engine='pyarrow')
                 shape(parquet)
 
