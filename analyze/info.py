@@ -113,31 +113,6 @@ def read_parquet_meta(file_path:str):
         print(converted)
     return ''
 
-# geo panda
-def update_by_panda(file_path:str):
-    parquet = gpd.read_parquet(file_path)
-    #sorted = parquet.sort_values(by='geometry') #might have worked?
-    sorted = parquet.sort_values(by='geometry',
-        key=lambda x: x.apply(lambda geom: (geom.centroid.x, geom.centroid.y)))
-    parquet = gpd.GeoDataFrame(sorted, geometry='geometry')
-    parquet.to_parquet('test2.parquet',
-        write_covering_bbox=True,
-        schema_version='1.1.0',
-        row_group_size=69390)   #120587) # parrow flag
-
-def update_by_panda_broken(file_path:str):
-    print(f"updating {file_path} to test2.parquet")
-    parquet_file = pd.read_parquet(file_path)
-    sorted = parquet_file.sort_values(parquet_file.columns[22])
-    #parquet_file['geometry'] = parquet_file['geometry'].apply(wkt.loads)
-    #parquet = gpd.GeoDataFrame(sorted, geometry='geometry')
-    parquet = gpd.GeoDataFrame(sorted)
-    #parquet = gpd.read_parquet(file_path)
-    parquet.to_parquet('test2.parquet',
-        write_covering_bbox=True,
-        schema_version='1.1.0',
-        row_group_size=69390)   #120587) # parrow flag
-
 def shape(parquet:pd.DataFrame):
     ''' rows and column info about the file '''
     print(parquet.shape)
@@ -226,8 +201,6 @@ runner = {'info':
         "Print a summary of the DataFrame including the data types of the columns."),
     'shape': row("Shape", 'panda', lambda x : shape(x), 'Dimentions of the DataFrame.'),
 
-    'transform': row('Transform', 'geopanda', lambda x : update_by_panda(x), "Update"),
-
     'group-stats': row('Group Stats','parquet',  lambda x : report_row_group_stats(x),
         "row group statistics"),
     'meta': row('Meta', 'parquet', lambda x : read_parquet_meta(x),
@@ -271,7 +244,7 @@ def handle_args() -> argparse.Namespace:
     parser.add_argument("parquet", help='Path to parquet file.')
     parser.add_argument("-r", "--reports",
         choices=['dtypes', 'info', 'describe', 'shape', 'head', 'foot', 'group-stats', 'meta',
-            'group-csv', 'transform'],
+            'group-csv'],
         nargs="+",
         help='Name of the csv file to write out.')
     parser.add_argument("-w", "--what", action='store_true', help='List all the options')
