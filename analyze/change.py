@@ -7,7 +7,9 @@ Create an analyses tool for geo parquet files
 import argparse
 import csv
 import io
+import os
 import sys
+import time
 
 import pyarrow
 import pyarrow.parquet as pq
@@ -37,19 +39,62 @@ def add_bbox(file_path:str, output_path:str):
         schema_version='1.1.0',
         row_group_size=69390)   #120587) # parrow flag
 
-def add_bbox_lots(file_path:str, output_path:str):
-    parquest_file = pq.ParquetFile(file_path)
-    for i in range(parquest_file.num_row_groups):
-        print(f"processing row group {i}")
-        table = parquest_file.read_row_group(i)
+def safe_wkt_load(geom_str):
+    try:
+        return wkt.loads(geom_str) if geom_str else None
+    except Exception as e:
+        #print(f"Error processing geometry: {e}")
+        return None
+
+def add_bbox_lots(file_path: str, output_path: str):
+    parquet_file = pq.ParquetFile(file_path)
+    temp_files = []
+
+    mark_start = int(time.time() * 1000)
+    for i in range(parquet_file.num_row_groups):
+        temp_file = f"{output_path}_temp_{i}.parquet"
+
+        if os.path.exists(temp_file):
+            print(f"Temporary file already exists: {temp_file}")
+            temp_files.append(temp_file)
+            continue
+
+        print(f"Processing row group {i}")
+        table = parquet_file.read_row_group(i)
         data = table.to_pandas()
-        data['geometry'] = data['geometry'].apply(wkt.loads)
+        data['geometry'] = data['geometry'].apply(safe_wkt_load)
         parquet = gpd.GeoDataFrame(data, geometry='geometry')
-        parquet.to_parquet(output_path,
-            write_covering_bbox=True,
-            schema_version='1.1.0',
-            row_group_size=120950,
-            append=True)
+
+        print(f"Writing row group to temporary file: {temp_file}")
+
+        parquet.to_parquet(temp_file,
+                           write_covering_bbox=True,
+                           schema_version='1.1.0',
+                           row_group_size=120950) #121793
+        temp_files.append(temp_file)
+
+    print("Combining temporary files")
+    combined_gdf = None
+    for temp_file in temp_files:
+        gdf = gpd.read_parquet(temp_file)
+        if combined_gdf is None:
+            combined_gdf = gdf
+        else:
+            combined_gdf = combined_gdf._append(gdf, ignore_index=True)
+        combined_gdf = combined_gdf.set_geometry('geometry')
+
+    print(f"Writing combined data to {output_path}")
+    combined_gdf.to_parquet(output_path,
+                        write_covering_bbox=True,
+                        schema_version='1.1.0',
+                        row_group_size=120950)
+
+    # Clean up temporary files
+    for temp_file in temp_files:
+        os.remove(temp_file)
+
+    mark_stop = int(time.time() * 1000)
+    print(f"Process completed in {mark_stop-mark_start}s")
 
 def update_by_panda_broken(file_path:str, output_path:str):
     print(f"updating {file_path} to test2.parquet")
