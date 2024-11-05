@@ -31,11 +31,25 @@ def sort_by_panda(file_path:str, output_path:str):
         row_group_size=69390)   #120587) # parrow flag
 
 def add_bbox(file_path:str, output_path:str):
-    parquet = gpd.read_parquet(file_path)
+    parquet = gpd.read_parquet(file_path, memory_map=True)
     parquet.to_parquet(output_path,
         write_covering_bbox=True,
         schema_version='1.1.0',
         row_group_size=69390)   #120587) # parrow flag
+
+def add_bbox_lots(file_path:str, output_path:str):
+    parquest_file = pq.ParquetFile(file_path)
+    for i in range(parquest_file.num_row_groups):
+        print(f"processing row group {i}")
+        table = parquest_file.read_row_group(i)
+        data = table.to_pandas()
+        data['geometry'] = data['geometry'].apply(wkt.loads)
+        parquet = gpd.GeoDataFrame(data, geometry='geometry')
+        parquet.to_parquet(output_path,
+            write_covering_bbox=True,
+            schema_version='1.1.0',
+            row_group_size=120950,
+            append=True)
 
 def update_by_panda_broken(file_path:str, output_path:str):
     print(f"updating {file_path} to test2.parquet")
@@ -61,6 +75,8 @@ def row(name:str, input, function, help_text:str) -> dict:
 runner = {
     'sort': row('Transform', 'geopanda', lambda x, y : sort_by_panda(x, y), "Update"),
     'add-bbox': row('Add BBox','geopanda',  lambda x, y : add_bbox(x, y), "Add BBox"),
+    'add-bbox-lots': row('Add BBox Lots','geopanda',
+        lambda x, y : add_bbox_lots(x, y), "Add Lots of BBox"),
 }
 
 def what():
@@ -95,7 +111,7 @@ def handle_args() -> argparse.Namespace:
     # Add command-line arguments
     parser.add_argument("parquet", help='Path to parquet file.')
     parser.add_argument("-a", "--actions",
-        choices=['add-bbox', 'sort'],
+        choices=['add-bbox', 'add-bbox-lots', 'sort'],
         nargs="+",
         help='Name of the csv file to write out.')
     parser.add_argument("-o", "--out",
