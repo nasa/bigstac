@@ -19,25 +19,25 @@ from shapely.geometry import box
 # pylint: disable=unnecessary-lambda
 
 # geo panda
-def sort_by_panda(file_path:str):
+def sort_by_panda(file_path:str, output_path:str):
     parquet = gpd.read_parquet(file_path)
     #sorted = parquet.sort_values(by='geometry') #might have worked?
     sorted = parquet.sort_values(by='geometry',
         key=lambda x: x.apply(lambda geom: (geom.centroid.x, geom.centroid.y)))
     parquet = gpd.GeoDataFrame(sorted, geometry='geometry')
-    parquet.to_parquet('test2.parquet',
+    parquet.to_parquet(output_path,
         write_covering_bbox=True,
         schema_version='1.1.0',
         row_group_size=69390)   #120587) # parrow flag
 
-def add_bbox(file_path:str):
+def add_bbox(file_path:str, output_path:str):
     parquet = gpd.read_parquet(file_path)
-    parquet.to_parquet('bbox.parquet',
+    parquet.to_parquet(output_path,
         write_covering_bbox=True,
         schema_version='1.1.0',
         row_group_size=69390)   #120587) # parrow flag
 
-def update_by_panda_broken(file_path:str):
+def update_by_panda_broken(file_path:str, output_path:str):
     print(f"updating {file_path} to test2.parquet")
     parquet_file = pd.read_parquet(file_path)
     sorted = parquet_file.sort_values(parquet_file.columns[22])
@@ -45,7 +45,7 @@ def update_by_panda_broken(file_path:str):
     #parquet = gpd.GeoDataFrame(sorted, geometry='geometry')
     parquet = gpd.GeoDataFrame(sorted)
     #parquet = gpd.read_parquet(file_path)
-    parquet.to_parquet('test2.parquet',
+    parquet.to_parquet(output_path,
         write_covering_bbox=True,
         schema_version='1.1.0',
         row_group_size=69390)   #120587) # parrow flag
@@ -54,9 +54,13 @@ def update_by_panda_broken(file_path:str):
 
 # ################################################################################################ #
 
+def row(name:str, input, function, help_text:str) -> dict:
+    ''' shorten the creation of one row of the runner dictioanry '''
+    return {'name': name, 'input': input, 'function': function, 'help': help_text}
+
 runner = {
-    'sort': row('Transform', 'geopanda', lambda x : sort_by_panda(x), "Update"),
-    'add-bbox': row('Add BBox','geopanda',  lambda x : add_bbox(x), "Add BBox"),
+    'sort': row('Transform', 'geopanda', lambda x, y : sort_by_panda(x, y), "Update"),
+    'add-bbox': row('Add BBox','geopanda',  lambda x, y : add_bbox(x, y), "Add BBox"),
 }
 
 def what():
@@ -67,21 +71,19 @@ def what():
 
 def run(args: argparse.Namespace):
     ''' Script task '''
-    if args.reports:
-        parquet = pd.read_parquet(args.parquet, engine='pyarrow')
-        for rep in args.reports:
-            if not rep in runner:
+    if args.actions:
+        for act in args.actions:
+            if not act in runner:
                 continue
-            thing_to_run = runner[rep]
-            #print(thing_to_run['name'])
+            thing_to_run = runner[act]
             match thing_to_run['input']:
                 case 'parquet':
-                    print(runner[rep]['function'](args.parquet))
+                    print(runner[act]['function'](args.parquet, args.out))
                 case 'geopanda':
-                    print(runner[rep]['function'](args.parquet))
+                    print(runner[act]['function'](args.parquet, args.out))
                 case 'panda':
-                    print(runner[rep]['function'](parquet))
-            #print('-'*80)
+                    parquet = pd.read_parquet(args.parquet, engine='pyarrow')
+                    print(runner[act]['function'](parquet, args.out))
 
 # ################################################################################################ #
 # Mark: - Command functions
@@ -92,10 +94,13 @@ def handle_args() -> argparse.Namespace:
 
     # Add command-line arguments
     parser.add_argument("parquet", help='Path to parquet file.')
-    parser.add_argument("-r", "--reports",
+    parser.add_argument("-a", "--actions",
         choices=['add-bbox', 'sort'],
         nargs="+",
         help='Name of the csv file to write out.')
+    parser.add_argument("-o", "--out",
+        default='output.parquet',
+        help='optional output file name for action')
     parser.add_argument("-w", "--what", action='store_true', help='List all the options')
 
     # Parse arguments

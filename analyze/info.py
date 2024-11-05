@@ -218,20 +218,18 @@ def what():
 def run(args: argparse.Namespace):
     ''' Script task '''
     if args.reports:
-        parquet = pd.read_parquet(args.parquet, engine='pyarrow')
         for rep in args.reports:
             if not rep in runner:
                 continue
             thing_to_run = runner[rep]
-            #print(thing_to_run['name'])
             match thing_to_run['input']:
                 case 'parquet':
                     print(runner[rep]['function'](args.parquet))
                 case 'geopanda':
                     print(runner[rep]['function'](args.parquet))
                 case 'panda':
+                    parquet = pd.read_parquet(args.parquet, engine='pyarrow')
                     print(runner[rep]['function'](parquet))
-            #print('-'*80)
 
 # ################################################################################################ #
 # Mark: - Command functions
