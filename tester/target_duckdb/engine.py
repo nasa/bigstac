@@ -83,10 +83,10 @@ class DuckDbSystem(target_system.TargetSystem):
         ''' Generate an bounding box attribute query statement for the where clause '''
         # todo: use this for LIR too, as an option
         partial_statment = f"\n\t-- {step.description}\n"
-        partial_statment += f"\t({step.xmin} >= {step.bbox_column_name}.xmin AND "
-        partial_statment += f"{step.xmax} <= {step.bbox_column_name}.xmax AND "
-        partial_statment += f"{step.ymin} >= {step.bbox_column_name}.ymin AND "
-        partial_statment += f"{step.ymax} <= {step.bbox_column_name}.ymax) \n"
+        partial_statment += f"\t({step.xmin} <= {step.bbox_column_name}.xmax AND "
+        partial_statment += f"{step.xmax} >= {step.bbox_column_name}.xmin AND "
+        partial_statment += f"{step.ymin} <= {step.bbox_column_name}.ymax AND "
+        partial_statment += f"{step.ymax} >= {step.bbox_column_name}.ymin) \n"
 
         return partial_statment
 
