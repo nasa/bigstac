@@ -73,12 +73,26 @@ class DuckDbSystem(target_system.TargetSystem):
                     where_list.append(self.generate_geometry(step))
                 elif step.type_of == 'time':
                     where_list.append(self.generate_time(step))
+                elif step.type_of == 'bbox':
+                    where_list.append(self.generate_bbox(step))
 
         stm_where = '\tAND'.join(where_list)
         return stm_where
 
+    def generate_bbox(self, step: test_config.OpType) -> str:
+        ''' Generate an bounding box attribute query statement for the where clause '''
+        # todo: use this for LIR too, as an option
+        partial_statment = f"\n\t-- {step.description}\n"
+        partial_statment += f"\t({step.xmin} >= {step.bbox_column_name}.xmin AND "
+        partial_statment += f"{step.xmax} <= {step.bbox_column_name}.xmax AND "
+        partial_statment += f"{step.ymin} >= {step.bbox_column_name}.ymin AND "
+        partial_statment += f"{step.ymax} <= {step.bbox_column_name}.ymax) \n"
+
+        return partial_statment
+
+
     def generate_geometry(self, step: test_config.OpType) -> str:
-        ''' Generate a Geometry statment for the where close '''
+        ''' Generate a Geometry statement for the where clause '''
         # intersects = st_intersects
         # contains = st_contains
         partial_statment = f"\n\t-- {step.description}\n"
@@ -92,7 +106,7 @@ class DuckDbSystem(target_system.TargetSystem):
         return partial_statment
 
     def generate_time(self, step: test_config.OpType) -> str:
-        ''' Generate a Time statment for the where close '''
+        ''' Generate a Time statement for the where clause '''
         # datetime
         # end_datetime
         # start_datetime
