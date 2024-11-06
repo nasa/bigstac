@@ -1,0 +1,14 @@
+pyarrow
+pandas
+geopandas
+shapely
+pylint
+dask
+dask[distributed]
+dask_geopandas
+bokeh
+
+#pystac_client
+#stac_geoparquet
+#lonboard
+#antimeridian
