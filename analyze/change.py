@@ -17,6 +17,7 @@ import pandas as pd
 import geopandas as gpd
 from shapely import wkb, wkt
 from shapely.geometry import box
+import dask.dataframe as dd
 
 # pylint: disable=unnecessary-lambda
 
@@ -46,6 +47,12 @@ def safe_wkt_load(geom_str):
         #print(f"Error processing geometry: {e}")
         return None
 
+def process_file(file):
+    gdf = gpd.read_parquet(file)
+    if 'bbox' in gdf.columns:
+        gdf = gdf.drop(columns=['bbox'])
+    return gdf
+
 def add_bbox_lots(file_path: str, output_path: str):
     parquet_file = pq.ParquetFile(file_path)
     temp_files = []
@@ -73,19 +80,38 @@ def add_bbox_lots(file_path: str, output_path: str):
                            row_group_size=120950) #121793
         temp_files.append(temp_file)
 
-    print("Combining temporary files")
-    combined_gdf = None
-    for temp_file in temp_files:
-        gdf = gpd.read_parquet(temp_file)
-        if combined_gdf is None:
-            combined_gdf = gdf
-        else:
-            combined_gdf = combined_gdf._append(gdf, ignore_index=True)
+    #print("Combining temporary files")
+    #combined_gdf = None
+    #for temp_file in temp_files:
+    #    gdf = gpd.read_parquet(temp_file)
+    #    if combined_gdf is None:
+    #        combined_gdf = gdf
+    #    else:
+    #        combined_gdf = combined_gdf._append(gdf, ignore_index=True)
+    #    combined_gdf = combined_gdf.set_geometry('geometry')
+
+    print("Combining temporary files with dask")
+    # Use Dask to read and concatenate the parquet files
+    ddf = dd.read_parquet(temp_files)
+
+    # Compute the result in chunks
+    chunk_size = 100000  # Adjust this value based on your available memory
+    combined_gdf = gpd.GeoDataFrame()
+
+    for chunk in ddf.partitions:
+        chunk_pd = chunk.compute()
+
+        #if 'bbox' in chunk_pd.columns:
+        #    chunk_pd['bbox'] = chunk_pd.drop(columns=['bbox'])
+
+        chunk_gdf = gpd.GeoDataFrame(chunk_pd, geometry='geometry')
+
+        combined_gdf = combined_gdf._append(chunk_gdf, ignore_index=True)
         combined_gdf = combined_gdf.set_geometry('geometry')
 
     print(f"Writing combined data to {output_path}")
     combined_gdf.to_parquet(output_path,
-                        write_covering_bbox=True,
+                        #write_covering_bbox=True,
                         schema_version='1.1.0',
                         row_group_size=120950)
 
