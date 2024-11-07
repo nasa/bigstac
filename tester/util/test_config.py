@@ -17,7 +17,7 @@ class OpType(BaseModel):
     ''' A single operation within a test. '''
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
     description: str = None
-    type_of: Literal["geometry", "time", "bbox"]
+    type_of: Literal["geometry", "time", "bbox", "attribute_raw"]
     option: str = None
     value: str = None
     xmin: float = None
@@ -25,6 +25,7 @@ class OpType(BaseModel):
     ymin: float = None
     ymax: float = None
     bbox_column_name: str = "bbox"
+    statement: str = None
 
 class OperationType(BaseModel):
     ''' A set of operations for a single test. '''

@@ -75,9 +75,18 @@ class DuckDbSystem(target_system.TargetSystem):
                     where_list.append(self.generate_time(step))
                 elif step.type_of == 'bbox':
                     where_list.append(self.generate_bbox(step))
+                elif step.type_of == 'attribute_raw':
+                    where_list.append(self.generate_attribute_raw(step))
 
         stm_where = '\tAND'.join(where_list)
         return stm_where
+
+    def generate_attribute_raw(self, step: test_config.OpType) -> str:
+        ''' Generate an bounding box attribute query statement for the where clause '''
+        partial_statment = f"\n\t-- {step.description}\n"
+        partial_statment += f"\t{step.statement} \n"
+
+        return partial_statment
 
     def generate_bbox(self, step: test_config.OpType) -> str:
         ''' Generate an bounding box attribute query statement for the where clause '''
