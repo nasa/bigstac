@@ -72,7 +72,9 @@ class AssessConfig(BaseModel):
     description: str = None
     name: str = None
     inputs: list[str] = None
+    setup: dict[str, str] = None
     tests: list[AssessType]
+    takedown: dict[str, str] = None
 
 # ################################################################################################ #
 

@@ -1,7 +1,8 @@
 {
     "name": "Primary tests",
     "description": "A basic set of tests modled after: SELECT granule, geometry FROM parquet_scan('data/{provider}/{short_name}/all.parquet') WHERE st_intersects(geometry::geometry, '{user_search}'::GEOMETRY) ORDER BY granule",
-    "inputs": ["data"],
+    "setup": {"sql": "SELECT version();"},
+    "takedown": {"sql": "SELECT version();"},
     "tests": [
         {
             "name": "test1-with-time",

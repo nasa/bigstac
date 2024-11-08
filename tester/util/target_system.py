@@ -7,6 +7,9 @@ from util import test_config
 # pylint: disable=W0107
 class TargetSystem:
     ''' Interface to represent actions that can be taken against a target system to test. '''
+
+    special_lifecycle_name: str = 'life-cycle-event'
+
     def __init__(self):
         ''' Constructor '''
         self.data = {}

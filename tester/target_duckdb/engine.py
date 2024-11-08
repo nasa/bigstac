@@ -32,6 +32,19 @@ class DuckDbSystem(target_system.TargetSystem):
 
     def generate_tests(self) -> [str, test_config.AssessType]:
         ''' Generator to produce tests specific to the system. Will call yield. '''
+
+        # ######################
+        # special case setup for pre-processing quarries
+        if self.data.setup:
+            if 'sql' in self.data.setup:
+                sql = f"-- Initial setup\n{self.data.setup['sql']}"
+                setup_test = test_config.AssessConfig(name=self.special_lifecycle_name,
+                    description='Initial database setup',
+                    tests=[])
+                yield [sql, setup_test]
+
+        # ######################
+        # generate tests
         for test in self.data.tests:
             src = test.source if test.source else '{data}/**/*.parquet'
             if not test.raw is None:
@@ -47,6 +60,16 @@ class DuckDbSystem(target_system.TargetSystem):
 
                 output.log.info(sql)
             yield [sql, test]
+
+        # ######################
+        # special case teardown for post-processing quarries
+        if self.data.takedown:
+            if 'sql' in self.data.takedown:
+                sql = f"-- Database Cleanup\n{self.data.setup['sql']}"
+                setup_test = test_config.AssessConfig(name=self.special_lifecycle_name,
+                    description='End of test database cleanup',
+                    tests=[])
+                yield [sql, setup_test]
 
     def generate_select(self, test: test_config.AssessType) -> str:
         ''' Generate a select statment of the sql '''

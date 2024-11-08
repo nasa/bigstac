@@ -204,6 +204,11 @@ def run(args:argparse.Namespace):
         test_query = resp[0]
         test_settings = resp[1]
 
+        if test_settings.name == engine.special_lifecycle_name:
+            flag = test_settings.description
+            queries.append(encode_csv_row(config.name, test_settings, flag, test_query))
+            continue
+
         if not args.no_orig:
             queries.append(encode_csv_row(config.name, test_settings, "flag-0-base", test_query))
 
