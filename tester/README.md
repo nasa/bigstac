@@ -1,10 +1,10 @@
 # Testing Big Stac
 
-A sub-project to bulk test different BigSTAC solutions.
+A hastily thrown together sub-project to bulk test different BigSTAC solutions.
 
 TL;DR:
 
-Just want to run tests? Create a [suite.json](suite.json) file, pass it to `create_sql.py` and pipe the output to `sql_tester.py`. See #create_sql.py and sql_tester.py below.
+Just want to run tests? Create a [suite.json](suite.json) file that conforms to [util/test_config.py](util/test_config.py), pass it to `create_sql.py` and pipe the output to `sql_tester.py`. See #create_sql.py and sql_tester.py below.
 
 	./create_sql.py suite.json | ./sql_tester.py --data '"../path/to/data/*.parquet"' --note run-two
 
@@ -16,9 +16,11 @@ Create a testing platform for conduting sets of codafied tests against different
 
 A JSON schema and configuration file specifying the set of tests to perform against any candidate sysem. The basic idea is to define a Temporal, Spatial, or parameter search in the abstract and then have those tests translated to what ever input is required for the testing target. For example, duckdb takes SQL (the only target at this point).
 
-The code itself actually uses pydantic to validate the test definition, where the JSON schema was
-to flush out ideas on what the input should look like. You can find the definition at:
-[util/test_config.py](util/test_config.py).
+The code itself actually uses [pydantic](https://docs.pydantic.dev/latest/) to validate the test definition, where
+the JSON schema was to flush out the ideas on what the input should look like. You can find the definition at:
+[util/test_config.py](util/test_config.py). The file also has a working JSON and YAML example which is validated
+with some assert statments which can be run by calling `python3 util/test_config.py`. It is hoped that this script
+will maybe do a better job then this readme.
 
 To write a test, create a file that conforms to the schema.json file. Implimentations of this schema contain a list of `tests`. A test object then contains a list of `operations` which are at this time are of type `ands` (and). Each member of the operations list contains:
 
@@ -89,7 +91,7 @@ that is created to help debug issues.
 | create_sql.py | In Use | Takes the same configuration files and generates a CSV of sql statments
 | locustfile.py | Draft  | Like blast, but in locust for the bug lovers
 | run.duckdb.py | n/a    | A wrapper for use in blast
-| single.py     | Done   | Runs the configuration and generates
+| single.py     | Done   | Runs the configuration and generates results.
 | sql_tester.py | In Use | Runs a sequential list of tests from create_sql.py
 
 ### blast.py
