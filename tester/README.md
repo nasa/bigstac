@@ -1,6 +1,12 @@
 # Testing Big Stac
 
-A sub-project to bulk test different BigSTAC solutions
+A sub-project to bulk test different BigSTAC solutions.
+
+TL;DR:
+
+Just want to run tests? Create a [suite.json](suite.json) file, pass it to `create_sql.py` and pipe the output to `sql_tester.py`. See #create_sql.py and sql_tester.py below.
+
+	./create_sql.py suite.json | ./sql_tester.py --data '"../path/to/data/*.parquet"' --note run-two
 
 ## Overview
 
@@ -8,9 +14,13 @@ Create a testing platform for conduting sets of codafied tests against different
 
 ## Test Definition
 
-A JSON schema and configuration file specifying the set of tests to perform against any candidate sysem. The basic idea is to define a Temporal, Spatial, or parameter search in the abstract and then have those tests translated to what ever input is required for the testing target. For example, duckdb takes SQL.
+A JSON schema and configuration file specifying the set of tests to perform against any candidate sysem. The basic idea is to define a Temporal, Spatial, or parameter search in the abstract and then have those tests translated to what ever input is required for the testing target. For example, duckdb takes SQL (the only target at this point).
 
-To write a test, create a file that conforms to the schema.json file. Implimentations of this schema contain a list of `operations` which are at this time are of type `ands` (and). Each member of the operations list contains:
+The code itself actually uses pydantic to validate the test definition, where the JSON schema was
+to flush out ideas on what the input should look like. You can find the definition at:
+[util/test_config.py](util/test_config.py).
+
+To write a test, create a file that conforms to the schema.json file. Implimentations of this schema contain a list of `tests`. A test object then contains a list of `operations` which are at this time are of type `ands` (and). Each member of the operations list contains:
 
 | Field       | Required | Example      | Description |
 | ----------- | -------- | ------------ | ----------- |
@@ -19,33 +29,72 @@ To write a test, create a file that conforms to the schema.json file. Implimenta
 | value       | Yes      | POLYGON((... | data to search with, ex: geometry: a Polygon
 | description |          | anything     | optional note on the test
 
+Alternatively you can supply a `raw` query which is a raw search query to be run against the target
+engine, which in the case of duckdb is SQL. When doing this there still needs to be a placeholder for the data
+to be loaded which test scripts will supply. Use `{data}` to do this, for sql this will always be in the `from`
+statment. Operation based tests will use the `source` setting.
+
+Finally, if there are any setup or takedown commands that need to be run, these can be specified at
+the top level. For a working example, see suite.json.
+
 Each test also needs a `name` and an optional description.
 
-## Testing cases
+NOTE: the system also allows for the same configuration to be created as a YAML file.
 
-* query
-	* all records (no input?)
-	* spatial only
-	* temporal only
-	* field only
-	* spatial & temporal
-	* spatial & field
-	* temporal & field
-	* spatial, temporal, & field
+Here is a simple example configuration:
+
+    {
+    "name": "Primary tests",
+    "description": "A basic set of tests",
+    "setup": {"sql": "SELECT version();"},
+    "takedown": {"sql": "SELECT version();"},
+    "tests": [
+        {
+            "name": "test1-with-time",
+            "description": "conduct an intersecting box search which is then sorted",
+            "columns": ["granuleid"],
+            "operations": [
+                {
+                    "ands": [
+                        {
+                            "description": "does a box interset and find records",
+                            "type_of": "geometry",
+                            "option": "intersects",
+                            "value": "POLYGON((...))"
+                        }
+                    ]
+                }
+            ],
+            "sortby": "GranuleID",
+            "source": "{data}",
+            "expected": {"action": "greater-then", "value": 11208}
+        },
+		 {
+            "name": "raw-test",
+            "description": "conduct an time based search which is less then",
+            "raw": "SELECT * FROM read_parquet({data}) WHERE StartTime <= '2015-06-29T16:21' ORDER BY granuleid LIMIT 2000",
+            "source": "{data}"
+        }
+	   ]
+    }
+
+Don't skimp on the names and descriptions, many of these find their way into the result output and also the SQL
+that is created to help debug issues.
 
 ## Testing Application
 
 | Application   | Status | Usage
 | ------------- | ------ | ----
 | blast.py      | Draft  | A full testing app which tries to test multiple instances of duckdb
-| create_sql.py | ?      | Takes the same configuration files and generates a CSV of sql statments
-| locustfile.py | Done   | Like blast, but in locust for the bug lovers
+| create_sql.py | In Use | Takes the same configuration files and generates a CSV of sql statments
+| locustfile.py | Draft  | Like blast, but in locust for the bug lovers
 | run.duckdb.py | n/a    | A wrapper for use in blast
 | single.py     | Done   | Runs the configuration and generates
-| sql_tester.py | ?      | Runs a sequential list of tests from create_sql.py
-
+| sql_tester.py | In Use | Runs a sequential list of tests from create_sql.py
 
 ### blast.py
+
+(not activly maintained)
 
 A testing application that will convert the test configuration file into search commands specific to the search engine that is to be worked against.
 
@@ -54,6 +103,8 @@ This is a standalone tester which will load the configuration file, generate que
 ---
 
 ### locustfile.py
+
+(not activly maintained)
 
 A [Locust](https://locust.io/) test which generates test queries from the Schema configuration and then runs them against the target engine (currently only duckdb).
 
@@ -97,18 +148,28 @@ For example: `2024-10-21_16-22-01-Primary_tests-fastrun.csv`
 
 ### create_sql.py and sql_tester.py
 
-These two applcations work off of the same configuration files but split up the work of generating tests and then testing them. First generate a list of statments with:
+These two applcations work off of the same configuration files from above but split up the work of generating tests and the testing itself. These two scripts form the bulk of the lattest tests.
+
+The **first** step is to generate a list of statments. These statments are based on the original config file but additional queries are created to create a more broad set of tests. The queries are changed to replace the select statment with a select all query. Limit as also changed with an input value. Finnally Order by is dropped. In all 8 queries can exist for one base query.
+
+This can be done with:
 
 	./create_sql.py --all --order suite.json > out.csv
 
 where:
+
 * --all, will add tests with `SELECT *` unless test already is a star select
-* --order, will add tests without order by unless test alread is missing order by
-* suite.json, no flag given, name of config file
+* --order, will add tests without order by unless test allread is missing order by
+* suite.json, no flag is given, name of config file
+
+Other params are:
+
+* --no-orig, will drop the original query. It is assumed that --all and/or --order will be used.
+* --limit, add a limit to queries if they do not already have one
 
 Output is CSV and can be piped to a file.
 
-To run tests use:
+The **second** step is to run tests with:
 
 	./sql_tester.py \
 		--data "../../path/to/data/*.parquet" \
@@ -116,8 +177,9 @@ To run tests use:
 		--config out.csv
 
 where:
+
 * --data is the path to parquet file or where to start looking for them if the config file has paths
-* --note text to include in report about the run
+* --note text to include in report about the run, what is being tested.
 * out.csv, no flag given, name of config file
 
 Output will be written similar to `single.py` but to a `reports` directory so as to not get in the way of those runs.
@@ -128,6 +190,8 @@ Both scripts can be run together:
 		./sql_tester.py --data '"../../path/to/data/*.parquet"' --note run-two
 
 ## Findings
+
+(more to be added)
 
 ### Multi processing
 
@@ -145,6 +209,10 @@ Other notes:
 * https://duckdb.org/docs/data/multiple_files/overview.html#list-of-globs
 * https://duckdb.org/docs/configuration/overview.html
 * https://duckdb.org/docs/guides/performance/my_workload_is_slow
+
+### Profiling
+
+* https://duckdb.org/docs/configuration/pragmas
 
 ## License
 Copyright &copy; 2024 United States Government as represented by the Administrator of the National Aeronautics and Space Administration. All Rights Reserved.
