@@ -16,6 +16,7 @@ __pycache__
 
 # any and all directories beginning with "data" assumed to hold test data/harvester output
 **/data*
+**/s3
 
 **/*test*.json
 **/*test*.csv
