@@ -11,6 +11,8 @@ __pycache__
 .DS_Store
 .vscode
 *.db
+.venv
+*.swp
 
 # any and all directories beginning with "data" assumed to hold test data/harvester output
 **/data*
@@ -21,3 +23,6 @@ __pycache__
 #  env files
 **/.env
 **/.env.*
+
+**/*.csv
+
