@@ -140,7 +140,7 @@ def groups_to_csv(path_to_file):
         headers.append(name('index'))
         #headers.append(name('compression'))
         #headers.append(name('offset'))
-        headers.append(name('meta'))
+        #headers.append(name('meta'))
         headers.append(name('min'))
         headers.append(name('max'))
         headers.append(name('nulls'))
@@ -166,10 +166,10 @@ def groups_to_csv(path_to_file):
             #row_csv[name('compression')] = column.compression
             #row_csv[name('offset')] = column.data_page_offset
             row_csv[name('index')] = col
-            if hasattr(column, 'metadata'):
-                row_csv[name('meta')] = column.metadata
-            else:
-                row_csv[name('meta')] = str(column.to_dict().keys())
+            #if hasattr(column, 'metadata'):
+            #    row_csv[name('meta')] = column.metadata
+            #else:
+            #    row_csv[name('meta')] = str(column.to_dict().keys())
             #row_csv[name('type')] = str(type(column))
             row_csv[name('min')] = column.statistics.min
             row_csv[name('max')] = column.statistics.max

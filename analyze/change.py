@@ -53,13 +53,20 @@ def process_file(file):
         gdf = gdf.drop(columns=['bbox'])
     return gdf
 
+# ################################################################################################ #
+# Add bbox to a very large file one row group at a time
+
 def add_bbox_lots(file_path: str, output_path: str):
     parquet_file = pq.ParquetFile(file_path)
     temp_files = []
 
     mark_start = int(time.time() * 1000)
+
+    # ######################################
+    # Process each row group
+
     for i in range(parquet_file.num_row_groups):
-        temp_file = f"{output_path}_temp_{i}.parquet"
+        temp_file = f"temp/{output_path}_temp_{i}.parquet"
 
         if os.path.exists(temp_file):
             print(f"Temporary file already exists: {temp_file}")
@@ -68,6 +75,7 @@ def add_bbox_lots(file_path: str, output_path: str):
 
         print(f"Processing row group {i}")
         table = parquet_file.read_row_group(i)
+        num_rows = parquet_file.metadata.row_group(i).num_rows
         data = table.to_pandas()
         data['geometry'] = data['geometry'].apply(safe_wkt_load)
         parquet = gpd.GeoDataFrame(data, geometry='geometry')
@@ -77,36 +85,20 @@ def add_bbox_lots(file_path: str, output_path: str):
         parquet.to_parquet(temp_file,
                            write_covering_bbox=True,
                            schema_version='1.1.0',
-                           row_group_size=120950) #121793
+                           row_group_size=num_rows) #121793
         temp_files.append(temp_file)
 
-    #print("Combining temporary files")
-    #combined_gdf = None
-    #for temp_file in temp_files:
-    #    gdf = gpd.read_parquet(temp_file)
-    #    if combined_gdf is None:
-    #        combined_gdf = gdf
-    #    else:
-    #        combined_gdf = combined_gdf._append(gdf, ignore_index=True)
-    #    combined_gdf = combined_gdf.set_geometry('geometry')
+    # ######################################
+    # Process each row group
 
-    print("Combining temporary files with dask")
-    # Use Dask to read and concatenate the parquet files
-    ddf = dd.read_parquet(temp_files)
-
-    # Compute the result in chunks
-    chunk_size = 100000  # Adjust this value based on your available memory
-    combined_gdf = gpd.GeoDataFrame()
-
-    for chunk in ddf.partitions:
-        chunk_pd = chunk.compute()
-
-        #if 'bbox' in chunk_pd.columns:
-        #    chunk_pd['bbox'] = chunk_pd.drop(columns=['bbox'])
-
-        chunk_gdf = gpd.GeoDataFrame(chunk_pd, geometry='geometry')
-
-        combined_gdf = combined_gdf._append(chunk_gdf, ignore_index=True)
+    print("Combining temporary files")
+    combined_gdf = None
+    for temp_file in temp_files:
+        gdf = gpd.read_parquet(temp_file)
+        if combined_gdf is None:
+            combined_gdf = gdf
+        else:
+            combined_gdf = combined_gdf._append(gdf, ignore_index=True)
         combined_gdf = combined_gdf.set_geometry('geometry')
 
     print(f"Writing combined data to {output_path}")
@@ -116,11 +108,13 @@ def add_bbox_lots(file_path: str, output_path: str):
                         row_group_size=120950)
 
     # Clean up temporary files
-    for temp_file in temp_files:
-        os.remove(temp_file)
+    #for temp_file in temp_files:
+    #    os.remove(temp_file)
 
     mark_stop = int(time.time() * 1000)
     print(f"Process completed in {mark_stop-mark_start}s")
+
+# ################################################################################################ #
 
 def update_by_panda_broken(file_path:str, output_path:str):
     print(f"updating {file_path} to test2.parquet")
@@ -134,8 +128,6 @@ def update_by_panda_broken(file_path:str, output_path:str):
         write_covering_bbox=True,
         schema_version='1.1.0',
         row_group_size=69390)   #120587) # parrow flag
-
-# ################################################################################################ #
 
 # ################################################################################################ #
 

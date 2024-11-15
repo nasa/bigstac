@@ -57,8 +57,6 @@ def clean_up_on_exit():
     print("\033[?47l", end='')  # restore screen
 
     # also close the database connection
-    if globals()['conn']:
-        duckdb.close(connection=globals()['conn'])
 
 # ################################################################################################ #
 # Mark - Thread Functions
@@ -69,6 +67,7 @@ def process_job(conn, details:dict) -> list:
     returned.
     '''
     result = None
+    cursor = conn.cursor() # each thread must have a copy of the connection
     try:
         # Report on the current thread
         record_thread_id()
@@ -77,7 +76,7 @@ def process_job(conn, details:dict) -> list:
 
         # Do query and time it
         time_start = time.time()*1000
-        result = conn.sql(details['query']).fetchall()
+        result = cursor.sql(details['query']).fetchall()
         time_stop = time.time()*1000
 
         # Report both to the log and the CUI
@@ -90,20 +89,23 @@ def process_job(conn, details:dict) -> list:
         logging.error(ex)
     return result
 
+def hatch_duck_connection():
+    return duckdb.connect(config = {'threads': 4,
+                        'worker_threads': 4,
+                        'external_threads': 4,
+                        'allocator_background_threads': True})
+
 # ################################################################################################ #
 # Mark - App functions
 
 def work(args):
     ''' Create a work list and several threads to prove if Duckdb can handle it. '''
+    time_start = int(time.time()*1000)
     globals()['thread_info'] = {}
-    globals()['conn'] = conn = duckdb.connect(config = {'threads': 4,
-        'worker_threads': 4,
-        'external_threads': 4,
-        'allocator_background_threads': True})
 
     # setup
     task_list = [] # things to do
-    query = f"select * from read_parquet({args.data})"
+    query = f"select geometry from read_parquet({args.data})"
     logging.debug(query)
 
     # create list of things to do
@@ -113,16 +115,37 @@ def work(args):
     # Create threads
     if 0 < len(task_list):
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
+
+            if args.method == "many":
+                conns = [
+                    hatch_duck_connection()
+                    for _ in range(args.workers)
+                ]
+                futures = [
+                    executor.submit(process_job, conn, task)
+                    for conn, task in zip(conns, task_list)
+                ]
+            elif args.method == "single":
+                conn = hatch_duck_connection()
+                futures = [
+                    executor.submit(process_job, conn, task)
+                    for task in task_list
+                ]
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result(120)
+                if result is not None:
+                    logging.debug(result)
+
             # Be sure to use cursor() to create a copy of the connection or you'll get into trouble
-            results = executor.map(lambda x : process_job(conn.cursor(), x), task_list, timeout=120)
+            #results = executor.map(lambda x : process_job(conns.pop(), x), task_list, timeout=120)
             # Go through all the outputs and print them out
-            for r in results:
-                if r is not None:
-                    logging.debug(r)
+            #for r in results:
+            #    if r is not None:
+            #        logging.debug(r)
 
     # Clean up
-    duckdb.close(connection=conn)
-    logging.info('Done.')
+    time_stop = int(time.time()*1000)
+    logging.info(f"Done in {time_stop - time_start}ms.")
 
 def main():
     ''' Responds to a call from the command line '''
@@ -133,6 +156,7 @@ def main():
     parser.add_argument("-w", '--workers', type=int, default=3, help="number of workers")
     parser.add_argument("-t", '--tasks', type=int, default=10, help="number of threads")
     parser.add_argument("-C", '--no-cui', action="store_true", help="don't take over the UI")
+    parser.add_argument("-m", '--method', type=str, default="many", help="don't take over the UI")
     parser.add_argument('-d', '--data', type=str, help="path to data")
     args = parser.parse_args()
 
@@ -144,3 +168,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+5 + 3
