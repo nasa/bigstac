@@ -10,6 +10,7 @@ import inspect
 import os
 import queue
 import time
+import threading
 
 from locust import User, task, events
 import duckdb
@@ -105,6 +106,11 @@ class Foiegras(User):
     def on_start(self):
         ''' handle user start up tasks '''
         print(f"starting user {self.user_id}")
+        if not self.user_id in globals():
+            engine = globals()['engine']
+            globals()[self.user_id] = engine.give_to_each_user().cursor()
+            thread_name = str(threading.current_thread().name)
+            print(f"first time with {thread_name}")
 
     def on_stop(self):
         ''' Handle user shut down tasks '''
@@ -118,6 +124,7 @@ class Foiegras(User):
         has. Run the search and check the response to see if it is valid.
         '''
         item = work_provider.get()
+        #print("here with a list")
         if item:
             for _ in range(self.environment.call_count):
                 #1. setup
@@ -131,23 +138,28 @@ class Foiegras(User):
                 # 2. run test
                 output = ''
                 error_exception = None
-                start_time = time.time()
+                start_time = None
                 stop_time = None
                 if self.environment.use_direct_command:
                     # Note: out of the box this will not work with more then 1 user due to duckdb
                     # blocking.
-                    print("❗️ - using direct method")
-                    output = duckdb.sql(sql).fetchall()
+                    print(f"❗️ - using direct method for {self.user_id}")
+                    start_time = time.time()
+                    output = engine.run_test_as_thread(globals()[self.user_id], sql)
                     stop_time = time.time()
                 else:
-                    # Use a wrapper to call duckdb to get around blocking issue
-
                     if check_function_implementation(engine.run_test_as_script):
+                        # Use a wrapper to call duckdb to get around blocking issue
+                        print("as a script")
+                        start_time = time.time()
                         output, error = engine.run_test_as_script(sql)
                         stop_time = time.time()
                     else:
+                        # Single thread assumption
+                        start_time = time.time()
                         output = engine.run_test(sql)
                         stop_time = time.time()
+
                         output = '\n'.join(output)
                         error = None
 
