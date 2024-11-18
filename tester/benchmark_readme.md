@@ -17,3 +17,5 @@ Follow these steps to run the same benchmarks the NASA EED BiGSTAC team ran on 2
       - `./create_sql.py suite7.json | ./sql_tester.py --data "['path/to/first_file.parquet', 'path/to/second_file.parquet']" -n 'name_of_this_benchmark_run' -t 5`
     - Multiple directories example:
       - `./create_sql.py suite7.json | ./sql_tester.py --data "['path/to/first_directory/*.parquet', 'path/to/second_directory/*.parquet']" -n 'name_of_this_benchmark_run' -t 5`
+
+The benchmark results will be saved in JSON and CSV format to the `tester/reports` directory.
