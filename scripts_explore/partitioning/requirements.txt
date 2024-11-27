@@ -1,2 +1,4 @@
 pygeohash
 ipywidgets
+contextily
+cartopy
