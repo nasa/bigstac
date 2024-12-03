@@ -1,6 +1,14 @@
 # Partitioning of Parquet files
 
-Here in this directory are some python notebooks demonstrating how to partition a parquet file spatially using custome code.
+A prototype project that partitions geoparquet files into smaller geoparquet files specific to one Geohash code.
+
+## Overview
+
+This project directory contains python notebooks demonstrating how to partition a parquet file spatially using [Geohash](https://en.wikipedia.org/wiki/Geohash) as the marker for partition file membership. The reason for breaking up large parquet files into smaller ones is so that a system can limit the number of files needing to be searched if a query bounding box can be supplied. The idea being to eliminate as much as posible for non-global queries.
+
+## Running
+
+All of these notebooks were developed and run under Visual Studio Code. There is a requirements.txt file for the third party libraries. Load these requirements into what every python instulation that is used by VSCode, which may not be the same one as defined in PATH.
 
 ## Bucket Brigade
 
@@ -14,6 +22,24 @@ Here in this directory are some python notebooks demonstrating how to partition 
 
 ![geohash_buckets.png](geohash_buckets.png)
 
+In the image above there is a special case SW-NW bucket which holds all the records to large to fit into one geohash box, but do not cross over the eastern half of the globe. These region buckets are not part of geohash, but geohash codes are used to calculate membership. The other 9 medium size boxes hold records which fully fit into one of those spaces. Finally there are two boxes which are sub boxes to the top levels. These also contain records which fit exclusivly to these regions. All boxes are showing every tenth record.
+
 ## Next steps
 
 The next steps will be to create a script based off of the nested bucket code to calculate how many records will be stored in different depth trees. We need to decided if we should use 2,3,4, or 5 deap trees.
+
+## Resources
+
+* https://geohash.softeng.co/r - visualize geohash on the globe
+
+---
+
+License
+
+Copyright © 2024 United States Government as represented by the Administrator of the National Aeronautics and Space Administration. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
