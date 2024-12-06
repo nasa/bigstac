@@ -1,5 +1,5 @@
-from shapely.geometry import box
-from shapely.geometry import Polygon
+from shapely.geometry import box, Polygon
+from shapely import wkb
 import pygeohash as pgh
 
 
@@ -69,6 +69,15 @@ def hash_to_path(hash1, hash2):
 
 
 def geometry_to_hash_path(geom: Polygon, geohash_length: int = 1) -> str:
+  minx, miny, maxx, maxy = geom.bounds
+  hash1 = pgh.encode(longitude=minx, latitude=miny, precision=geohash_length)
+  hash2 = pgh.encode(longitude=maxx, latitude=maxy, precision=geohash_length)
+
+  return  hash_to_path(hash1, hash2)
+
+def wkb_to_hash_path(blob: bytes, geohash_length: int = 1) -> str:
+
+  geom = wkb.loads(blob)
   minx, miny, maxx, maxy = geom.bounds
   hash1 = pgh.encode(longitude=minx, latitude=miny, precision=geohash_length)
   hash2 = pgh.encode(longitude=maxx, latitude=maxy, precision=geohash_length)
