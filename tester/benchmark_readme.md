@@ -38,14 +38,14 @@ The data in the following S3 prefixes contains a total of:
 - 75,000,314 CMR granules
 - 1,308 files
 
-data_wl_20120101_20150101_05pg/<br>
-data_wl_20150101_20170701_05pg/<br>
-data_wl_20170701_20190101_05pg/<br>
-data_wl_20190101_20200101_05pg/<br>
-data_wl_20200101_20210101_05pg/<br>
-data_wl_20210101_20210705_05pg/<br>
+`data_wl_20120101_20150101_05pg`/<br>
+`data_wl_20150101_20170701_05pg`/<br>
+`data_wl_20170701_20190101_05pg`/<br>
+`data_wl_20190101_20200101_05pg`/<br>
+`data_wl_20200101_20210101_05pg`/<br>
+`data_wl_20210101_20210705_05pg`/<br>
 
 There is also a single file version:<br>
-merged_sorted_ddb_75mil.parquet
+`merged_sorted_ddb_75mil`.parquet
 - 3.5 GB compressed parquet data
 - 75,000,314 CMR granules
