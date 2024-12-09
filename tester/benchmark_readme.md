@@ -23,14 +23,14 @@ The benchmark results will be saved in JSON and CSV format to the `tester/report
 About Data:
 -----------
 
-*17 million granule dataset*
+**17 million granule dataset**<br>
 This dataset is based on the 75m granule dataset (below), but retaining only the single largest shape for every unique granule ID.
 - 2.4 GB compressed parquet data
 - 41 files
 
 The data in the `geohash_bins` prefix contains files split into 32 1-character resolution geohash bins, 8 larger spatial bins based on hemispheres or quadrants, and one file containing granules that intersect with all geohash bins (thereby being global or nearly global in extent).
 
-*75 million granule dataset*
+**75 million granule dataset**<br>
 This dataset contains duplicate records in that a single granule unique ID is split into multiple records when the geometry is a complex shape (e.g. with islands or with a hole).
 
 The data in the following S3 prefixes contains a total of:
@@ -38,14 +38,14 @@ The data in the following S3 prefixes contains a total of:
 - 75,000,314 CMR granules
 - 1,308 files
 
-data_wl_20120101_20150101_05pg/
-data_wl_20150101_20170701_05pg/
-data_wl_20170701_20190101_05pg/
-data_wl_20190101_20200101_05pg/
-data_wl_20200101_20210101_05pg/
-data_wl_20210101_20210705_05pg/
+data_wl_20120101_20150101_05pg/<br>
+data_wl_20150101_20170701_05pg/<br>
+data_wl_20170701_20190101_05pg/<br>
+data_wl_20190101_20200101_05pg/<br>
+data_wl_20200101_20210101_05pg/<br>
+data_wl_20210101_20210705_05pg/<br>
 
-There is also a single file version:
+There is also a single file version:<br>
 merged_sorted_ddb_75mil.parquet
 - 3.5 GB compressed parquet data
 - 75,000,314 CMR granules
