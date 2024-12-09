@@ -36,6 +36,9 @@ use crate::geohash_utils::hash_to_path;
 /* ********************************************************************************************** */
 // MARK: Structures
 
+const MAX_ROW_GROUPS: usize = 1_000_000;
+const MAX_ROWS_IN_ROW_GROUP: usize = 1_000_000;
+
 struct Config {
     file: String,
     depth: i32,
@@ -75,9 +78,9 @@ Read in a geo parquet file and process it by row groups
 * `file_path` - A string that holds the path to the file to read
 */
 fn read_geoparquet(file_path: &str, depth: i32) -> Result<(), Box<dyn std::error::Error>> {
-    let file = File::open(file_path)?;
     let process_start = Instant::now();
 
+    let file = File::open(file_path)?;
     let reader = SerializedFileReader::new(file)?;
     let metadata = reader.metadata();
     let num_row_groups = metadata.num_row_groups();
@@ -90,17 +93,38 @@ fn read_geoparquet(file_path: &str, depth: i32) -> Result<(), Box<dyn std::error
     for i in 0..num_row_groups {
         let row_group_reader = reader.get_row_group(i)?;
         process_row_group(&*row_group_reader, i, &mut stats, depth)?; //* is like magic
-        if i > 1_000_000 {
+        if i > MAX_ROW_GROUPS {
             break;
         }
     }
+    let durration = process_start.elapsed();
 
     // Assuming stats is of type HashMap<String, i32>
     let sorted_stats: BTreeMap<_, _> = stats.into_iter().collect();
+
+    //const format = "{:-6}: {:10}";
+    let mut accumulator = 0;
+    let (mut bucket_sum, mut bucket_count, mut big_box_sum, mut big_box_sum_count) = (0, 0, 0, 0);
     for (key, value) in sorted_stats.iter() {
+        accumulator = 1 + value;
+        if "All,Global,North,East,West,South,NW,NE,SE,SW".contains(key) {
+            big_box_sum += value;
+            big_box_sum_count += 1;
+        } else {
+            bucket_sum += value;
+            bucket_count += 1;
+        }
         println!("{:-6}: {:10}", key, value);
     }
-    let durration = process_start.elapsed();
+    println!("{:-6}: {:10}", "Sum", accumulator);
+    println!("{:-6}: {:10.1}", "Avg", (accumulator as f64) / (sorted_stats.len() as f64));
+
+    println!("{:-6}: {:10}", "BigSum", big_box_sum);
+    println!("{:-6}: {:10}", "BigBox", big_box_sum/big_box_sum_count);
+
+    println!("{:-6}: {:10}", "BktSum", bucket_sum);
+    println!("{:-6}: {:10}", "Bucket", bucket_sum/bucket_count);
+
     info!("Processing took: {:.3?}", durration);
 
     Ok(())
@@ -130,7 +154,7 @@ fn process_row_group(row_group_reader: &dyn RowGroupReader, index: usize,
     }
 
     let mut row_count = 0;
-    const MAX_ROWS: usize = 1_000_000; // Adjust this value as needed
+    const MAX_ROWS: usize = MAX_ROWS_IN_ROW_GROUP; // Adjust this value as needed
 
     match column_reader {
         ColumnReader::ByteArrayColumnReader(ref mut reader) => {
