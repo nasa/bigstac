@@ -1,6 +1,7 @@
+/*
+Functions related to calculating what geohash region a given geohash code is in.
+*/
 use std::char;
-//use std::cmp::min;
-use log::info;
 
 const NE: &str = "uvyzstwx";
 const NW: &str = "bcfg89de";
@@ -94,8 +95,6 @@ fn box_for(bottom_left: char, top_right: char) -> String {
 pub fn hash_to_path(hash1: &str, hash2: &str) -> String {
     let mut path: Vec<String> = Vec::new();
     let box_result = box_for(hash1.chars().next().unwrap(), hash2.chars().next().unwrap());
-
-    info!("box_result: {}", box_result);
 
     if box_result.len() == 1 {
         for letter in compair(hash1, hash2).chars() {

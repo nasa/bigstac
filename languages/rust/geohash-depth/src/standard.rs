@@ -6,6 +6,9 @@ example:
 >cargo build
 >./target/debug/geohash-depth s3/bigstac-duckdb-benchmark-data-01/23m_nonGlobal.parquet 1
 
+NOTE: will only process 1_000_000 row groups as this is a demo app. Adjust as needed below
+NOTE: will only process 1_000_000 rows in a row group as this is a demo app. Adjust as needed below
+
 */
 
 use std::env;
@@ -13,10 +16,11 @@ use std::process;
 use std::fs::File;
 use std::collections::HashMap;
 use std::collections::BTreeMap;
-use log::{debug, info, warn, error};
+use std::time::Instant;
 
 use arrow::array::{Array, BinaryArray};
 use arrow::record_batch::RecordBatch;
+use log::{debug, info, warn, error};
 use parquet::file::reader::{FileReader, SerializedFileReader, RowGroupReader};
 use parquet::column::reader::{ColumnReader};
 use parquet::data_type::ByteArray;
@@ -72,6 +76,7 @@ Read in a geo parquet file and process it by row groups
 */
 fn read_geoparquet(file_path: &str, depth: i32) -> Result<(), Box<dyn std::error::Error>> {
     let file = File::open(file_path)?;
+    let process_start = Instant::now();
 
     let reader = SerializedFileReader::new(file)?;
     let metadata = reader.metadata();
@@ -85,7 +90,7 @@ fn read_geoparquet(file_path: &str, depth: i32) -> Result<(), Box<dyn std::error
     for i in 0..num_row_groups {
         let row_group_reader = reader.get_row_group(i)?;
         process_row_group(&*row_group_reader, i, &mut stats, depth)?; //* is like magic
-        if i > 1000 {
+        if i > 1_000_000 {
             break;
         }
     }
@@ -95,6 +100,8 @@ fn read_geoparquet(file_path: &str, depth: i32) -> Result<(), Box<dyn std::error
     for (key, value) in sorted_stats.iter() {
         println!("{:-6}: {:10}", key, value);
     }
+    let durration = process_start.elapsed();
+    info!("Processing took: {:.3?}", durration);
 
     Ok(())
 }
@@ -117,10 +124,13 @@ fn process_row_group(row_group_reader: &dyn RowGroupReader, index: usize,
         .ok_or("Geometry column not found")?;
     let mut column_reader = row_group_reader.get_column_reader(geometry_column_index)?;
 
-    info!("Processing row group {}", index);
+    //don't flood the logs with noise, print out every 10th row group
+    if index % 10 == 0 {
+        info!("Processing row group {}", index);
+    }
 
     let mut row_count = 0;
-    const MAX_ROWS: usize = 2; // 1_000_000; // Adjust this value as needed
+    const MAX_ROWS: usize = 1_000_000; // Adjust this value as needed
 
     match column_reader {
         ColumnReader::ByteArrayColumnReader(ref mut reader) => {
@@ -174,6 +184,12 @@ fn process_row_group(row_group_reader: &dyn RowGroupReader, index: usize,
 
 /**
 Read a WKB byte array and return a geohash code for the bounding box
+
+# Arguments
+
+* geometry - A reference to a geometry object which should have been parsed from a WKB
+# depth - number of geohash buckets down to bin into
+
 */
 fn handle_geometry<T: std::fmt::Debug + Num + Copy + num_traits::NumCast + std::cmp::PartialOrd>
         (geometry: &(impl GeometryTrait + ToGeoGeometry<T>), depth: i32) -> Option<String> {
@@ -257,6 +273,8 @@ Command line interface to the code
 */
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     log4rs::init_file("log4rs.yaml", Default::default())?;
+    info!("{}", "*".repeat(40));
+
     let args: Vec<String> = env::args().collect();
 
     let config = Config::build(&args).unwrap_or_else(|err| {
