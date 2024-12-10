@@ -28,6 +28,26 @@ In the image above there is a special case SW-NW bucket which holds all the reco
 
 The next steps will be to create a script based off of the nested bucket code to calculate how many records will be stored in different depth trees. We need to decided if we should use 2,3,4, or 5 deap trees.
 
+## A note about libraries
+
+* python: pygeohash
+* go: geo-traits = "0.2.0"
+* rust: github.com/mmcloughlin/geohash v0.10.0
+
+pygeohash can create acturate values for edge coordinents such as latitude=0.0 and longitude -180 with both `pgh.encode()` and `pgh.encode_strictly()` but only if using the main version and not the "lattest" version you get when you call pip install
+
+	 pip3.10 install pygeohash # will give wrong results
+	 pip3.10 uninstall pygeohash
+	 pip3.10 install 'pygeohash @ git+https://github.com/wdm0006/pygeohash' # sometimes better results
+
+Testing as found that some results are rounded incorrectly in python:
+
+| latitude | longitude | python | go    | rust
+| -------- | --------- | ------ | ----- | -----
+| -90.0    | 180.0     | pbpbp  | 00000 | 00000
+| 0.0      | 180.0     | xbpbp  | 80000 | 80000
+| 90.0     | 180.0     | zzzzz  | 00000 | 00000
+
 ## Resources
 
 * https://geohash.softeng.co/r - visualize geohash on the globe

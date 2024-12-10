@@ -1,8 +1,8 @@
 /*
+
 An application made to calculate the geohash bucket that rows of a parquet file would be filed into.
 
 example:
-
 >cargo build
 >./target/debug/geohash-depth s3/bigstac-duckdb-benchmark-data-01/23m_nonGlobal.parquet 1
 
@@ -46,6 +46,11 @@ struct Config {
 
 impl Config {
     fn build(args: &[String]) -> Result<Config, &'static str> {
+        if args[1] == "--test" {
+            run_geo_hash_tests();
+            std::process::exit(0);
+        }
+
         if args.len() < 3 {
             return Err("not enough arguments");
         }
@@ -56,6 +61,51 @@ impl Config {
         Ok(Config { file, depth })
     }
 }
+
+fn run_geo_hash_tests() {
+
+//let c2 = geo::Coord {x: upper_right.x.to_f64().unwrap(), y: upper_right.y.to_f64().unwrap()}
+
+    fn to_hash(yy: f64, xx: f64, depth: i32) -> String {
+        let coord = geo::Coord {x: xx, y: yy};
+        return geohash::encode(coord, depth as usize).expect("Invalid coordinate");
+    }
+
+    let tests = vec![
+        ((42.6, -5.6), 5, "ezs42", "normal at 5"),
+        ((42.6, -5.6), 4, "ezs4", "normal at 4"),
+        ((42.6, -5.6), 3, "ezs", "normal at 3"),
+        ((42.6, -5.6), 2, "ez", "normal at 2"),
+        ((42.6, -5.6), 1, "e", "normal at 1"),
+
+        ((0.0, -180.0), 5, "80000", "eq west"),
+        ((-90.0, 180.0), 5, "00000", "SE"), //python pbpbp
+        ((0.0, 180.0), 5, "80000", "eq east"), // python xbpbp
+        ((90.0, 180.0), 5, "00000", "NE"), //python zzzzz
+        ((-90.0, 0.0), 5, "h0000", "south central"),
+        ((0.0, -5.6), 5, "ebh00", "just south"),
+
+        ((-89.99, 179.99), 5, "pbpbp", "SE, close"),
+        ((0.0, 179.99), 5, "xbpbp", "eq east, close"),
+        ((89.99, 179.99), 5, "zzzzz", "NE, close"),
+    ];
+
+    for test in tests {
+        let (y, x) = test.0;
+        let result = to_hash(y, x, test.1);
+        assert_eq!(test.2, result, "{}", test.3);
+    }
+}
+
+/*
+
+let c2 = geo::Coord {x: upper_right.x.to_f64().unwrap(),
+                y: upper_right.y.to_f64().unwrap()};
+
+            let hash1 = geohash::encode(c1, depth as usize).expect("Invalid coordinate");
+
+*/
+
 
     /*
     // another way to read in parquet files

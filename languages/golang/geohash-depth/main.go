@@ -26,6 +26,7 @@ import (
 // MARK: Functions
 
 type Context struct {
+	Test  *bool
 	File  *string
 	Depth *int
 }
@@ -33,11 +34,51 @@ type Context struct {
 // Setup global variables for the application, populate most of them from the flag package
 func setup() Context {
 	ctx := Context{}
+	ctx.Test = flag.Bool("test", false, "Run a test of geohash and exit")
 	ctx.File = flag.String("file", "*.parquet", "Path to your GeoParquet file")
 	ctx.Depth = flag.Int("depth", 3, "GeoParquet path depth")
 	flag.Parse()
 
 	return ctx
+}
+
+func RunGeoHashTests() {
+	toHash := func(yy, xx float64, depth int) string {
+		return geohash.EncodeWithPrecision(yy, xx, uint(depth))
+	}
+
+	tests := []struct {
+		coord  [2]float64
+		depth  int
+		expect string
+		name   string
+	}{
+		{[2]float64{42.6, -5.6}, 5, "ezs42", "normal at 5"},
+		{[2]float64{42.6, -5.6}, 4, "ezs4", "normal at 4"},
+		{[2]float64{42.6, -5.6}, 3, "ezs", "normal at 3"},
+		{[2]float64{42.6, -5.6}, 2, "ez", "normal at 2"},
+		{[2]float64{42.6, -5.6}, 1, "e", "normal at 1"},
+
+		{[2]float64{0.0, -180.0}, 5, "80000", "eq west"},
+		{[2]float64{-90.0, 180.0}, 5, "00000", "SE"},    //python pbpbp
+		{[2]float64{0.0, 180.0}, 5, "80000", "eq east"}, // python xbpbp
+		{[2]float64{90.0, 180.0}, 5, "00000", "NE"},     // python zzzzz
+		{[2]float64{-90.0, 0.0}, 5, "h0000", "south central"},
+		{[2]float64{0.0, -5.6}, 5, "ebh00", "just south"},
+
+		{[2]float64{-89.99, 179.99}, 5, "pbpbp", "SE, close"},
+		{[2]float64{0.0, 179.99}, 5, "xbpbp", "eq east, close"},
+		{[2]float64{89.99, 179.99}, 5, "zzzzz", "NE, close"},
+	}
+
+	for _, test := range tests {
+		result := toHash(test.coord[0], test.coord[1], test.depth)
+		if result != test.expect {
+			fmt.Printf("Test '%s' failed. Expected: %s, Got: %s\n", test.name, test.expect, result)
+		} else {
+			fmt.Printf("Test '%s' passed.\n", test.name)
+		}
+	}
 }
 
 // Take a number, convert it to a number and add commas as humans expect: 1,000,000
@@ -242,6 +283,12 @@ func work(cxt Context) {
 // Command line interface
 func main() {
 	cxt := setup()
+
+	if *cxt.Test {
+		RunGeoHashTests()
+		os.Exit(0)
+	}
+
 	logFile := initLogs()
 	defer logFile.Close()
 
