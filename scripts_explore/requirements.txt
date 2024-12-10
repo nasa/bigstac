@@ -1,0 +1,10 @@
+
+pyarrow
+pandas
+duckdb
+
+dask_geopandas
+dask
+matplotlib
+shapely
+fastparquet
