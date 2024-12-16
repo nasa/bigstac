@@ -97,6 +97,15 @@ fn run_geo_hash_tests() {
     }
 }
 
+// Take a number, convert it to a string and add commas as humans expect: 1,000,000
+fn add_commas(n: i32) -> String {
+    let str = n.to_string();
+    if str.len() <= 3 {
+        return str;
+    }
+    format!("{},{:03}", add_commas(n / 1000), n % 1000)
+}
+
 /*
 
 let c2 = geo::Coord {x: upper_right.x.to_f64().unwrap(),
@@ -155,8 +164,12 @@ fn read_geoparquet(file_path: &str, depth: i32) -> Result<(), Box<dyn std::error
     //const format = "{:-6}: {:10}";
     let mut accumulator = 0;
     let (mut bucket_sum, mut bucket_count, mut big_box_sum, mut big_box_sum_count) = (0, 0, 0, 0);
+
+    //println!("{sorted_stats:?}");
+
     for (key, value) in sorted_stats.iter() {
-        accumulator = 1 + value;
+        //info!("{}: {}", key, value);
+        accumulator = accumulator + value;
         if "All,Global,North,East,West,South,NW,NE,SE,SW".contains(key) {
             big_box_sum += value;
             big_box_sum_count += 1;
@@ -164,16 +177,19 @@ fn read_geoparquet(file_path: &str, depth: i32) -> Result<(), Box<dyn std::error
             bucket_sum += value;
             bucket_count += 1;
         }
-        println!("{:-6}: {:10}", key, value);
+        println!("{:-6}: {:10}", key, add_commas(*value));
     }
-    println!("{:-6}: {:10}", "Sum", accumulator);
-    println!("{:-6}: {:10.1}", "Avg", (accumulator as f64) / (sorted_stats.len() as f64));
+    println!("{:-6}: {:10}", "Sum", add_commas(accumulator));
+    let avg = (accumulator as f64) / (sorted_stats.len() as f64);
 
-    println!("{:-6}: {:10}", "BigSum", big_box_sum);
-    println!("{:-6}: {:10}", "BigBox", big_box_sum/big_box_sum_count);
+    info!("{}/{}={}", accumulator, sorted_stats.len(), avg as i32);
 
-    println!("{:-6}: {:10}", "BktSum", bucket_sum);
-    println!("{:-6}: {:10}", "Bucket", bucket_sum/bucket_count);
+    println!("{:-6}: {:10}", "Avg", add_commas(avg as i32));
+    println!("{:-6}: {:10}", "BigSum", add_commas(big_box_sum));
+    println!("{:-6}: {:10}", "BigBox", add_commas(big_box_sum/big_box_sum_count));
+
+    println!("{:-6}: {:10}", "BktSum", add_commas(bucket_sum));
+    println!("{:-6}: {:10}", "Bucket", add_commas(bucket_sum/bucket_count));
 
     info!("Processing took: {:.3?}", durration);
 
@@ -204,7 +220,6 @@ fn process_row_group(row_group_reader: &dyn RowGroupReader, index: usize,
     }
 
     let mut row_count = 0;
-    const MAX_ROWS: usize = MAX_ROWS_IN_ROW_GROUP; // Adjust this value as needed
 
     match column_reader {
         ColumnReader::ByteArrayColumnReader(ref mut reader) => {
@@ -244,7 +259,7 @@ fn process_row_group(row_group_reader: &dyn RowGroupReader, index: usize,
                     }
 
                     row_count += 1;
-                    if row_count >= MAX_ROWS {
+                    if row_count >= MAX_ROWS_IN_ROW_GROUP {
                         break 'outer;
                     }
                 }
@@ -270,8 +285,31 @@ fn handle_geometry<T: std::fmt::Debug + Num + Copy + num_traits::NumCast + std::
     let geo_geometry = geometry.to_geometry();
     match geo_geometry {
         geo_types::Geometry::Point(point) => {
-            warn!("Point: {:?}", point);
-            None
+
+            let c1 = geo::Coord {x: point.x().to_f64().unwrap(),
+                y: point.y().to_f64().unwrap()};
+            //let coord = point.coord().expect("no 2d coord");
+
+            let hash1 = geohash::encode(c1, depth as usize).expect("Invalid coordinate");
+            let hash_path = hash_to_path(&hash1, &hash1);
+
+            Some(hash_path)
+        }
+        geo_types::Geometry::LineString(line_string) => {
+            let bbox = line_string.bounding_rect().unwrap();
+            let lower_left = bbox.min();
+            let upper_right = bbox.max();
+
+            let c1 = geo::Coord {x: lower_left.x.to_f64().unwrap(),
+                y: lower_left.y.to_f64().unwrap()};
+            let c2 = geo::Coord {x: upper_right.x.to_f64().unwrap(),
+                y: upper_right.y.to_f64().unwrap()};
+
+            let hash1 = geohash::encode(c1, depth as usize).expect("Invalid coordinate");
+            let hash2 = geohash::encode(c2, depth as usize).expect("Invalid coordinate");
+            let hash_path = hash_to_path(&hash1, &hash2);
+
+            Some(hash_path)
         }
         geo_types::Geometry::Polygon(polygon) => {
             let bbox = polygon.bounding_rect().unwrap();

@@ -25,6 +25,11 @@ import (
 /**************************************************************************************************/
 // MARK: Functions
 
+const (
+	MAX_ROW_GROUPS        = 1_000_000
+	MAX_ROWS_IN_ROW_GROUP = 1_000_000
+)
+
 type Context struct {
 	Test  *bool
 	File  *string
@@ -230,11 +235,14 @@ func work(cxt Context) {
 							fmt.Printf("Unknown geometry type: %T\n", g)
 						}
 					}
+					if rowIndex > MAX_ROWS_IN_ROW_GROUP {
+						break
+					}
 				}
 			}
 		}
 		// first 10 row groups
-		if rowGroupIndex >= 1 {
+		if rowGroupIndex >= MAX_ROW_GROUPS {
 			break
 		}
 	}
