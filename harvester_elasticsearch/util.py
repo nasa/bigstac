@@ -26,6 +26,8 @@ def create_time_partitions(min_date, max_date, interval="month"):
         date_range = pd.date_range(start=min_dt, end=max_dt, freq="D")
     elif interval == "month":
         date_range = pd.date_range(start=min_dt, end=max_dt, freq="MS")
+    elif interval == "year":
+        date_range = pd.date_range(start=min_dt, end=max_dt, freq="Y")
     else:
         raise ValueError(f"Unsupported interval: {interval}")
 

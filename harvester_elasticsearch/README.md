@@ -20,11 +20,16 @@ python localcluster.py --min_date "2021-07-05T00:00:00.000Z" --max_date "2022-12
 
 * `--max_pages` and `--buffer_size` you probably want to leave as default (5 and 50000)
     * `--max_pages` indicates how many "search after" pages to go through when querying ES, per day in the time range. Each day executes in parallel so it is much, much faster to specify a longer time range with shorter max_pages, as opposed to shorter time ranges with higher max_pages. Prelim testing shows max speed/efficiency at about 5 pages and dropping off by 20% by 10 pages.
+    * If `--max_pages` is set to 0, will skip limiting page depth at all.
     *  `--buffer_size` is the number of rows that accumulate in the main process' dataframe before being written out to a parquet file. Performance difference does not seem as pronounced here -- smaller buffer has the advantage of saving data more often in case of termination, but maybe a larger buffer would make post-processing merging less intensive. (untested)
 
 * `--host` and `--port` - probably leave as default
     * Elasticsearch tunnel is assumed to be at `localhost:9201`, but you can add `--host` and `--port` if it's different
 * `--large_coll_idx_file` and `--small_coll_filter_file` - probably leave as default
 	* The txt file names passed with probably should not change, these files are included in this repo and represent lists of public collections we are pulling from, used in slightly different ways depending on whether it's the Elasticsearch "small collections" granule index or one of the "large collections" granule indices
+    * The small collections file is optional, if not included will skip the extra queries to the small collections index
 
-PS -- if you want to go back over previously harvested days to get more pages, another option instead of increasing `--max_pages` is to instead modify the call to `create_time_partitions` in `localcluster.py` so that instead of passing `"day"` parameter, it passes `"hour"`. Function also accepts `"month"`.
+* `--time_interval` - probably want 'day' if using all collections, or 'month' if using a single provider's collections
+* can optionally specify `--num_workers` and `--num_threads_per_worker` to tweak Dask cluster to suit deployed instance
+
+PS -- if you want to go back over previously harvested days to get more pages, another option instead of increasing `--max_pages` is to instead use smaller time partitions such as month instead of year, day instead of month etc.

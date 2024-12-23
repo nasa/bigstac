@@ -1,3 +1,5 @@
+from collections import defaultdict
+from datetime import datetime
 import logging
 import time
 from typing import List, Dict, Optional, Any, Tuple
@@ -57,6 +59,82 @@ def read_collection_concept_ids(file_path: str) -> List[str]:
     """Read from file containing list of public collections."""
     with open(file_path, "r") as f:
         return [line.strip() for line in f if line.strip()]
+    
+
+def create_index_time_matrix(es_host, es_port, indices, time_partitions, interval):
+    """
+    Create a matrix of indices and time partitions, showing which indices have data for which partitions.
+    
+    :param es: Elasticsearch client
+    :param indices: List of index names
+    :param time_partitions: List of dictionaries with 'start' and 'end' keys
+    :param interval: 'day', 'month', or 'year'
+    :return: A dictionary with indices as keys and sets of partition start times as values
+    """
+    index_time_matrix = defaultdict(set)
+    
+    if interval == "hour":
+        calendar_interval = "1h"
+    elif interval == "day":
+        calendar_interval = "1d"
+    elif interval == "month":
+        calendar_interval = "1M"
+    elif interval == "year":
+        calendar_interval = "1y"
+    else:
+        raise ValueError("Interval must be 'hour', 'day', 'month', or 'year'")
+
+
+    es = Elasticsearch(
+        [{"host": es_host, "port": es_port, "scheme": "http"}],
+        timeout=120,
+        max_retries=4,
+        retry_on_timeout=True,
+    )
+
+    for index in indices:
+        query = {
+            "aggs": {
+                "time_buckets": {
+                    "date_histogram": {
+                        "field": "start-date",
+                        "calendar_interval": calendar_interval,
+                        "min_doc_count": 1
+                    }
+                }
+            },
+            "size": 0
+        }
+
+        try:
+            result = es.search(index=index, body=query)
+            buckets = result['aggregations']['time_buckets']['buckets']
+
+            for bucket in buckets:
+                bucket_time = datetime.utcfromtimestamp(bucket['key'] / 1000)
+                for partition in time_partitions:
+                    start = datetime.strptime(partition['start'], "%Y-%m-%dT%H:%M:%S.%fZ")
+                    end = datetime.strptime(partition['end'], "%Y-%m-%dT%H:%M:%S.%fZ")
+                    if start <= bucket_time < end:
+                        index_time_matrix[index].add(partition['start'])
+                        break
+
+        except Exception as e:
+            print(f"Error processing index {index}: {str(e)}")
+
+    return index_time_matrix
+
+
+def get_relevant_indices(index_time_matrix, partition):
+    """
+    Get relevant indices for a given time partition based on the index-time matrix.
+    
+    :param index_time_matrix: The matrix created by create_index_time_matrix
+    :param partition: Dictionary with 'start' and 'end' keys
+    :return: List of relevant indices
+    """
+    partition_start = partition['start']
+    return [index for index, partitions in index_time_matrix.items() if partition_start in partitions]
 
 
 # +---------------+
@@ -78,7 +156,7 @@ def create_es_query(
             }
         },
         "sort": [{"start-date": "asc"}, {"granule-ur-lowercase": "asc"}],
-        "size": 1000,
+        "size": 1000000,
     }
     if collection_concept_ids:
         query["query"]["bool"]["filter"].append({"terms": {"collection-concept-id": collection_concept_ids}})

@@ -13,6 +13,7 @@ __pycache__
 *.db
 .venv
 *.swp
+.python-version
 
 # any and all directories beginning with "data" assumed to hold test data/harvester output
 **/data*
