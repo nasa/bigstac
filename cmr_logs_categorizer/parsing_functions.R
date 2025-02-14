@@ -218,22 +218,30 @@ bbox_to_polygon <- function(column){
 #' Converts a bounding box to WKT and writes it to a column in the data.table by
 #' reference
 #'
+#' Only updates currently NA values of the output column.
+#'
 #' @param dt data.table containing bounding box column
 #' @param in_column name of bounding box column
 #' @param out_column name of WKT output column
+#' @param geo_type_column name of geometry type column
 #'
 #' @returns copy of the data.table
-convert_bbox_column <- function(dt, in_column, out_column){
+convert_bbox_column <- function(dt,
+                                in_column,
+                                out_column,
+                                geo_type_column = "geo_type") {
   in_column = as.name(in_column)
   column_class = class(dt[, eval(in_column)])
   # Calculate non-missing bounding box WKT values
   if(column_class == "list"){
-    dt[sapply(get(in_column), length) > 0, (out_column) := bbox_to_polygon(eval(in_column))]
+    i_condition = dt[sapply(get(in_column), length) > 0 & is.na(out_column), which = TRUE]
   } else if(column_class == "character"){
-    dt[!is.na(get(in_column)), (out_column) := bbox_to_polygon(eval(in_column))]
+    i_condition = dt[!is.na(get(in_column)) & is.na(out_column), which = TRUE]
   } else {
     stop(paste("Unsupported column type", column_class))
   }
+  dt[i_condition, (out_column) := bbox_to_polygon(eval(in_column))]
+  dt[i_condition, (geo_type_column) := "BBOX"]
 }
 
 
@@ -248,7 +256,12 @@ convert_bbox_column <- function(dt, in_column, out_column){
 #' @param out_wkt_column string, name of the column to hold output WKT points
 #' @param out_radius_column string, name of the column to hold output circle
 #'   radii
-calculate_circle_columns <- function(dt, circle_column, out_wkt_column, out_radius_column){
+#' @param geo_type_column name of geometry type column
+calculate_circle_columns <- function(dt,
+                                     circle_column,
+                                     out_wkt_column,
+                                     out_radius_column,
+                                     geo_type_column = "geo_type") {
   circle_column_class = class(dt[, get(circle_column)]) 
   
   if(circle_column_class == "list"){
@@ -265,6 +278,7 @@ calculate_circle_columns <- function(dt, circle_column, out_wkt_column, out_radi
 
   dt[i_condition, (out_wkt_column) := wkt_vec]
   dt[i_condition, (out_radius_column) := radius_vec]
+  dt[i_condition, (geo_type_column) := "CIRCLE"]
 }
 
 

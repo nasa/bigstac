@@ -215,20 +215,32 @@ dt[, .N, by = instrument][order(-N)]
 # Initialize `wkt` column with NA values
 dt[, wkt := NA_character_]
 
+# Initialize `geo_type` column with NA values
+# Because some stored geometry types are converted, this column indicates the
+# original geometry type from the CMR query
+dt[, geo_type := NA_character_]
+
 ## Polygons ----
 columns_polygon = grep('params.polygon', ignore.case = TRUE, names(dt), 
                        value = TRUE)
+na_wkt_before = dt[is.na(wkt), which = TRUE] 
 for(this_column in columns_polygon){
   dt[is.na(wkt), wkt := cmr_to_wkt(get(this_column), geo_type = "POLYGON")]
 }
+na_wkt_after = dt[is.na(wkt), which = TRUE]
+# By comparing NA values in `wkt` before and after updating it with the input
+# polygon columns, we determine which should be marked as POLYGON type
+dt[setdiff(na_wkt_before, na_wkt_after), geo_type := "POLYGON"]
 
 ## Bounding boxes ----
+# Handles updating `geo_type` column within function
 columns_bbox = grep('bounding.{0,1}box', ignore.case = TRUE, names(dt), value = TRUE)
 for(this_column in columns_bbox){
   convert_bbox_column(dt, this_column, "wkt")
 }
 
 ## Circles ----
+# Handles updating `geo_type` column within function
 columns_circles = grep('circle', ignore.case = TRUE, names(dt), value = TRUE)
 for(this_column in columns_circles){
   calculate_circle_columns(dt, this_column, "wkt", "circle_radius")
@@ -236,16 +248,22 @@ for(this_column in columns_circles){
 
 ## Lines ----
 columns_lines = grep('params.line', ignore.case = TRUE, names(dt), value = TRUE)
+na_wkt_before = dt[is.na(wkt), which = TRUE] 
 for(this_column in columns_lines){
   dt[is.na(wkt), wkt := cmr_to_wkt(get(this_column), geo_type = "LINESTRING")]
 }
+na_wkt_after = dt[is.na(wkt), which = TRUE]
+dt[setdiff(na_wkt_before, na_wkt_after), geo_type := "LINESTRING"]
 
 ## Points ----
 columns_points = grep('params.point', ignore.case = TRUE, names(dt), 
                      value = TRUE)
+na_wkt_before = dt[is.na(wkt), which = TRUE] 
 for(this_column in columns_points){
   dt[is.na(wkt), wkt := cmr_to_wkt(get(this_column), geo_type = "POINT")]
 }
+na_wkt_after = dt[is.na(wkt), which = TRUE]
+dt[setdiff(na_wkt_before, na_wkt_after), geo_type := "POINT"]
 
 # Address spatial errors ----
 # `string_to_wkt` writes errors to output, which WKT readers can't handle
@@ -260,7 +278,7 @@ dt[str_detect(wkt, "ERROR"), wkt := NA_character_]
 columns_transformed = c("id", "concept", "format", "user_agent_type", "cmr_took",
                         "used_search_after", "time_query", "provider", "sort_key",
                         "page_size", "page_num", "version", "short_name", 
-                        "concept_id", "instrument", "wkt", "circle_radius")
+                        "concept_id", "instrument", "wkt", "geo_type", "circle_radius")
 final_columns = c(columns_keep, columns_transformed, "error")
 final_columns = intersect(final_columns, names(dt))
 
@@ -270,3 +288,5 @@ out_file_name = paste0(str_split_i(in_file, pattern = "\\.", 1),
                   ".parquet")
 out_file_full_path = paste(in_path, out_file_name, sep = "/")
 write_parquet(dtSub, out_file_full_path)
+
+print(paste("Wrote table", out_file_full_path))
