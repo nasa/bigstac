@@ -3,7 +3,7 @@ set -e
 
 # Function to display usage
 show_usage() {
-    echo "This script exports CMR logs for the specified time range to a S3 bucket."
+    echo "This script exports CMR logs for the specified date range to a S3 bucket."
     echo
     echo "Ensure the dates are formatted according to the examples below."
     echo "The dates are inclusive: StartDate begins at midnight, and the"
