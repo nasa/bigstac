@@ -180,17 +180,23 @@ bbox_to_polygon <- function(column){
   bbox_features = lapply(column, function(value){
     # Inner lapply enables handling lists of multiple bounding boxes per query
     lapply(value, function(v){
-      # Convert CSV string to four numbers
-      bbox_num = as.numeric(str_split_1(v, pattern = ','))
-      # Convert numeric vector to bounding box object
-      bbox = st_bbox(c(
-        xmin = bbox_num[1], 
-        xmax = bbox_num[3], 
-        ymax = bbox_num[4], 
-        ymin = bbox_num[2]), crs = st_crs(4326)
-      )
-      # Return polygon version of bounding box
-      st_as_sfc(bbox)
+      tryCatch({
+        # Convert CSV string to four numbers
+        bbox_num = as.numeric(str_split_1(v, pattern = ','))
+        # Convert numeric vector to bounding box object
+        bbox = st_bbox(c(
+          xmin = bbox_num[1], 
+          xmax = bbox_num[3], 
+          ymax = bbox_num[4], 
+          ymin = bbox_num[2]), crs = st_crs(4326)
+        )
+        # Return polygon version of bounding box
+        st_as_sfc(bbox)
+      },
+      error = function(e){
+        return("ERROR: failed to parse bbox coordinates")
+      })
+
     }
     )
   })
