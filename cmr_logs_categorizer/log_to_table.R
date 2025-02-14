@@ -67,6 +67,10 @@ dt[str_detect(user_agent_type, "podaac-subscriber"),
 dt[, user_agent_type := str_split_i(user_agent_type, " v[[:digit:]]", 1)]
 dt[str_detect(user_agent_type, "[B|b]ot"), user_agent_type := "Bot"]
 dt[str_detect(user_agent_type, "[P|p]ython|PycURL"), user_agent_type := "Python"]
+# For now, all browser-like user agents will be handled as a single value
+# TODO: find a package that can better parse user agents to id specific browsers
+dt[str_detect(user_agent_type, "[M|m]ozilla"), 
+   user_agent_type := "Web Browser"]
 # # XXX CONSIDER FOR REPORT
 # dt[, .N, by = user_agent_type][order(-N)]
 
