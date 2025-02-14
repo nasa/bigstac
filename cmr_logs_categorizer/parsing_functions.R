@@ -39,12 +39,15 @@ getPathByPos <- function(uri, position = 1){
 
 
 #' Combine columns into a single string
-#' 
+#'
 #' @param dt data.table with the columns to combine
-#' @param columns_char a character vector containing names of columns that should be combined
-#' @param first If TRUE, return the first non-NA value. If FALSE, paste all column values into a single string (default: FALSE)
-#' 
-#' @return A character vector representing a column of strings combined from the input columns
+#' @param columns_char a character vector containing names of columns that
+#'   should be combined
+#' @param first If TRUE, return the first non-NA value. If FALSE, paste all
+#'   column values into a single string (default: FALSE)
+#'
+#' @return A character vector representing a column of strings combined from the
+#'   input columns
 combine_columns_get_nonNA <- function(dt, columns_char, first = FALSE){
   dtSub = dt[, ..columns_char]
   # Handle list type columns, combining their values into single strings per row
@@ -135,7 +138,8 @@ cmr_to_wkt <- function(column, geo_type){
 #' @param text CSV string of coordinates in pattern X,Y,X,Y,...
 #' @param geo_type feature type in all capital letters
 #'
-#' @returns a partially-formatted WKT string of the feature (without the geo_type prefix)
+#' @returns a partially-formatted WKT string of the feature (without the
+#'   geo_type prefix)
 string_to_wkt <- function(text, geo_type){
   # Early exit if given NA data
   if(is.na(text)) return(NULL)
