@@ -143,6 +143,11 @@ dt[, .N, by = .(has_temporal_query = !is.na(time_query))]
 columns_provider = grep('params.provider', ignore.case = TRUE, names(dt), 
                         value = TRUE)
 dt[, provider := combine_columns_get_nonNA(.SD, columns_provider, TRUE)]
+# Some have additonal parameters after a quote that were not parsed separately
+dt[, provider := str_split_i(provider, '"', 1)]
+dt[, provider := str_split_i(provider, "'", 1)]
+# Some are unintentional user or client app inputs, mark these as INVALID
+dt[str_detect(provider, "[^a-zA-Z0-9_]"), provider := "INVALID"]
 
 # XXX CONSIDER FOR REPORT
 dt[, .N, by = provider][order(-N)]
@@ -175,6 +180,12 @@ dt[, .N, by = page_num][order(-N)]
 columns_version = grep('params.version', ignore.case = TRUE, names(dt), 
                          value = TRUE) # exludes options.version..pattern
 dt[, version := combine_columns_get_nonNA(.SD, columns_version, TRUE)]
+# Some are unintentional user or client app inputs, mark these as INVALID
+dt[# keep strings with Near-Real-Time
+   str_detect(version, "(^(?!.*Near-Real-Time).*$)") & 
+   # and any strings using only these characters
+   str_detect(version, regex("[^a-zA-Z0-9_.,]")), 
+   version := "INVALID"]
 
 # XXX CONSIDER FOR REPORT
 dt[, .N, by = version][order(-N)]
