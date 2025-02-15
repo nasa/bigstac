@@ -15,11 +15,6 @@ source('parsing_functions.R')
 # Capture command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-# XXX DEBUG
-if(length(args) == 0){
-  args = c('prod-app-047c4bf7c23d46af8346597855880020/000000.json')
-}
-
 # Check if arguments were provided
 if (length(args) != 1) {
   stop("Must provide path to log data as an argument", call. = FALSE)
