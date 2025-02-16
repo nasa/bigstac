@@ -52,11 +52,16 @@ process_logs() {
   # Output filename
   json_filename="${filename_no_ext}.json"
 
+  # Uncompress logs
   # Get REPORT type log records
   # Keep only the JSON portion of the records (within the {})
-  # Combine all of the JSON records into a single array
-  # Save it to a file
-  gzcat $in_filename | grep REPORT | grep -oE "\\{.*\\}" | jq -s '.' > $json_filename
+  # Handle failures in JSON parsing due to incomplete records
+  # Combine all of the JSON records into a single array & save it to a file
+  gzcat $in_filename | \
+    grep REPORT | \
+    grep -oE "\\{.*\\}" | \
+    jq -R "fromjson? | . " -c | \
+    jq -s '.' > $json_filename
 
   # Run the RScript to extract desired keys from the JSON and write parquet tables
   Rscript log_to_table.R $json_filename
