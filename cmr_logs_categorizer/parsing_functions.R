@@ -303,11 +303,15 @@ parsed_circle_values <- function(csv){
     if(len_all_split != 3){
       notice = paste0("ERROR: got ", len_all_split, 
                       " split values instead of expected 3")
-      warning(notice)
-      return(notice)
+      extra_info = paste0(notice, "\n-- input circle CSV was: ", csv, "\n", 
+                          "--   this iteration was: ", x)
+      warning(extra_info)
+      point = notice
+      radius = NA_real_
+    } else {
+      point = paste0("(", all_split[1], " ", all_split[2], ")")
+      radius = all_split[3]
     }
-    point = paste0("(", all_split[1], " ", all_split[2], ")")
-    radius = all_split[3]
     list(point = point, radius = radius)
   })
   if(length(parsed_circles) > 1){
