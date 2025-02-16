@@ -3,7 +3,7 @@ set -e
 
 # Check if a directory argument is provided
 if [ $# -eq 0 ]; then
-    echo "Please provide a directory path as an argument."
+    echo "Please provide a directory path or path to text file containing list of .gz files as an argument."
     exit 1
 fi
 
@@ -15,8 +15,15 @@ fi
 
 # Check if the provided argument is a valid directory
 if [ ! -d "$1" ]; then
-    echo "The provided path is not a valid directory."
+  file_type=$(file -b $1)
+  if [ "$file_type" = "ASCII text" ]; then
+    search_directory=0
+  else
+    echo "The provided path is not a valid directory or ASCII text file."
     exit 1
+  fi
+else
+  search_directory=1
 fi
 
 # Check if GNU Parallel is installed
@@ -74,8 +81,16 @@ process_logs() {
 export -f process_logs
 
 # Use GNU Parallel to process all .gz files
-if [ $num_files -gt 0 ]; then
-  find $1 -type f -name "*.gz" | sort | head -n $num_files | parallel -j $num_threads process_logs
-else
-  find $1 -type f -name "*.gz" | sort | parallel -j $num_threads process_logs
+if [ $search_directory -eq 1 ]; then # Find .gz files in directory
+  if [ $num_files -gt 0 ]; then
+    find $1 -type f -name "*.gz" | sort | head -n $num_files | parallel -j $num_threads process_logs
+  else
+    find $1 -type f -name "*.gz" | sort | parallel -j $num_threads process_logs
+  fi
+else # Read filenames from a text file
+  if [ $num_files -gt 0 ]; then
+    cat $1 | sort | head -n $num_files | parallel -j $num_threads process_logs
+  else
+    cat $1 | sort | parallel -j $num_threads process_logs
+  fi
 fi
