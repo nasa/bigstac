@@ -1,0 +1,463 @@
+---
+title: "Categorize CMR Queries"
+output: 
+  html_document:
+    TOC: TRUE
+    fig_width: 6
+    fig_height: 4
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+# knitr::opts_knit$set(root.dir = '../dev/log_parsing')
+```
+
+
+```{r sources}
+suppressPackageStartupMessages({
+  library(data.table)
+  library(stringr)
+  library(sf)
+  library(arrow)
+  library(duckdb)
+  library(ggplot2)
+})
+source('analysis_functions.R')
+```
+
+
+```{r connect}
+con <- dbConnect(duckdb(), dbdir = "../dev/log_parsing/logs_week1.db")
+# dbExecute(con, "SET enable_object_cache=true")
+```
+
+## Load parquet into DuckDB DB
+
+Prepare column names
+```{r column_names, results='hide'}
+dtExample = dbGetQuery(con, "SELECT * FROM read_parquet('../dev/log_parsing/logs/**/*.parquet', union_by_name=true) LIMIT 1")
+column_names = names(dtExample)
+column_names[column_names == "client.id"] <- '"client.id" AS client_id' # rename client.id, removing period
+columns_except_id = paste(setdiff(column_names, "id"), collapse = ", ") # remove id column
+```
+
+Load parquet data into database file
+```{r create_db, results='hide'}
+dbExecute(con, paste(
+  'CREATE OR REPLACE TABLE week1 AS FROM (SELECT', 
+  columns_except_id,
+  'FROM read_parquet("../dev/log_parsing/logs/**/*.parquet", union_by_name=true)',
+  'ORDER BY now)'))
+```
+
+Check row count of created table
+```{r check_row_count}
+format(dbGetQuery(con, "SELECT COUNT(*) FROM week1")[1,1], big.mark=",")
+```
+
+### Example rows
+```{r}
+dbGetQuery(con, "SELECT * FROM week1 LIMIT 10")
+```
+
+Recalculate row ID column
+```{r rowID, results='hide'}
+dbExecute(con, paste(
+  "CREATE SEQUENCE id_seq START 1;",
+  "ALTER TABLE week1 ADD COLUMN id INTEGER DEFAULT nextval('id_seq');"
+))
+```
+
+## Spatial boolean
+```{r wkt_null_counts, include=FALSE}
+dbGetQuery(con, "SELECT COUNT(*) FROM week1 WHERE wkt IS NULL")
+dbGetQuery(con, "SELECT COUNT(*) FROM week1 WHERE wkt IS NOT NULL")
+```
+
+```{r spatial_bool, results='hide'}
+dbExecute(con, paste( 
+          "ALTER TABLE week1",
+          "ADD COLUMN spatial_bool BOOLEAN DEFAULT FALSE"))
+dbExecute(con, paste( 
+          "UPDATE week1",
+          "SET spatial_bool = TRUE",
+          "WHERE wkt IS NOT NULL"))
+```
+
+## Spatial complexity
+
+### Vertex Count
+```{r vertex_count}
+dtWKT = dbGetQuery(con, "SELECT wkt, id, geo_type FROM week1")
+setDT(dtWKT)
+dtWKT[, vertex_count := as.integer(count_vertices(wkt))]
+ecdf_fn_vert_count <- ecdf(dtWKT[!is.na(vertex_count), vertex_count])
+dtWKT[!is.na(vertex_count), vertex_pctile := round(ecdf_fn_vert_count(vertex_count), 6), by = vertex_count]
+dtWKT[!is.na(vertex_count), .N, by = .(vertex_count, vertex_pctile)][order(vertex_count)]
+```
+
+### Area
+```{r duckdb_spatial, include=FALSE}
+dbExecute(con, "INSTALL spatial; LOAD spatial")
+```
+
+```{r polygon_area, results='hide'}
+dbExecute(con, paste( 
+          "ALTER TABLE week1",
+          "ADD COLUMN polygon_area BIGINT"))
+```
+
+```{r duckdb_area, results='hide'}
+dbExecute(con, paste( 
+          "UPDATE week1",
+          "SET polygon_area = ST_AREA(ST_GeomFromText(wkt))",
+          "WHERE wkt IS NOT NULL AND geo_type == 'POLYGON'"))
+```
+
+```{r}
+dbGetQuery(con, "SELECT MAX(polygon_area) FROM week1 WHERE polygon_area IS NOT NULL")
+dtAreas = dbGetQuery(con, "SELECT id, polygon_area FROM week1 WHERE polygon_area IS NOT NULL")
+setDT(dtAreas)
+```
+
+```{r}
+ecdf_fn_area <- ecdf(dtAreas$polygon_area)
+dtAreas[!is.na(polygon_area), area_pctile := ecdf_fn_area(polygon_area), by = .(polygon_area)]
+dtAreas[!is.na(polygon_area), .N, by = .(polygon_area, area_pctile)][order(polygon_area)]
+```
+
+### Join Vertex Count and Area back to DuckDB table
+```{r add_area_vertex_columns, results='hide'}
+dbExecute(con, paste( 
+          "ALTER TABLE week1",
+          "ADD COLUMN vertex_count USMALLINT;",
+          "ALTER TABLE week1",
+          "ADD COLUMN vertex_pctile FLOAT;",
+          "ALTER TABLE week1",
+          "ADD COLUMN area_pctile FLOAT;"))
+```
+
+```{r register_areas_vertices, results='hide'}
+duckdb_register(con, "dtAreas", dtAreas)
+duckdb_register(con, "dtWKT", dtWKT)
+```
+
+```{r test_join, include=FALSE}
+dbGetQuery(con, paste(
+  "SELECT week1.id, week1.polygon_area, dtAreas.area_pctile",
+  "FROM week1",
+  "JOIN dtAreas",
+  "ON week1.id = dtAreas.id"
+))
+```
+```{r copy_area_pctile, results='hide'}
+dbExecute(con, paste(
+  "UPDATE week1",
+  "SET area_pctile = dtAreas.area_pctile",
+  "FROM dtAreas",
+  "WHERE week1.id = dtAreas.id"
+))
+```
+
+```{r test_copied_area_pctile, include=FALSE}
+dbGetQuery(con, paste(
+  "SELECT id, polygon_area, area_pctile",
+  "FROM week1",
+  "WHERE polygon_area IS NOT NULL"
+))
+dbGetQuery(con, paste(
+  "SELECT id, polygon_area, area_pctile",
+  "FROM week1",
+  "WHERE area_pctile >= 0.99"
+))
+```
+```{r copy_vertices, results='hide'}
+dbExecute(con, paste(
+  "UPDATE week1",
+  "SET vertex_count = dtWKT.vertex_count,",
+      "vertex_pctile = dtWKT.vertex_pctile",
+  "FROM dtWKT",
+  "WHERE week1.id = dtWKT.id"
+))
+```
+
+```{r test_copied_vertices, include=FALSE}
+dbGetQuery(con, paste(
+  "SELECT id, vertex_count, vertex_pctile",
+  "FROM week1",
+  "WHERE vertex_count IS NOT NULL"
+))
+```
+
+## Temporal Boolean
+
+```{r temporal_bool, include=FALSE}
+dbExecute(con, paste( 
+          "ALTER TABLE week1",
+          "ADD COLUMN temporal_bool BOOLEAN DEFAULT FALSE"))
+dbExecute(con, paste( 
+          "UPDATE week1",
+          "SET temporal_bool = TRUE",
+          "WHERE time_query IS NOT NULL"))
+```
+
+## Ordering Boolean
+
+```{r sort_bool, results='hide'}
+dbExecute(con, paste( 
+          "ALTER TABLE week1",
+          "ADD COLUMN sort_bool BOOLEAN DEFAULT FALSE"))
+dbExecute(con, paste( 
+          "UPDATE week1",
+          "SET sort_bool = TRUE",
+          "WHERE sort_key IS NOT NULL"))
+```
+
+### Multiple ordering
+
+```{r calculate_sort_count}
+dtOrders = dbGetQuery(con, "SELECT id, sort_key FROM week1 WHERE sort_key IS NOT NULL")
+setDT(dtOrders)
+dtOrders[, sort_count := count_vertices(sort_key)]
+dtOrders[, .N, by = sort_count][order(-N)]
+```
+
+```{r copy_sort_count, results='hide'}
+duckdb_register(con, "dtOrders", dtOrders)
+dbExecute(con, paste( 
+          "ALTER TABLE week1",
+          "ADD COLUMN sort_count TINYINT"))
+dbExecute(con, paste( 
+          "UPDATE week1",
+          "SET sort_count = dtOrders.sort_count",
+          "FROM dtOrders",
+          "WHERE week1.id = dtOrders.id"))
+```
+
+```{r test_sort_count, include=FALSE}
+dbGetQuery(con, paste(
+  "SELECT id, sort_count",
+  "FROM week1",
+  "WHERE sort_count IS NOT NULL"
+))
+```
+
+## Provider vs. Collection
+
+```{r create_prov_coll, results='hide'}
+dbExecute(con, paste( 
+          "ALTER TABLE week1",
+          "ADD COLUMN prov_coll CHARACTER DEFAULT ''"))
+```
+
+```{r update_prov_coll, results='hide'}
+dbExecute(con, paste( 
+          "UPDATE week1",
+          "SET prov_coll = 'Provider'",
+          "WHERE provider IS NOT NULL AND concept_id IS NULL")) # 7393219
+dbExecute(con, paste( 
+          "UPDATE week1",
+          "SET prov_coll = 'Collection'",
+          "WHERE provider IS NULL AND concept_id IS NOT NULL")) # 2651164
+dbExecute(con, paste( 
+          "UPDATE week1",
+          "SET prov_coll = 'Both'",
+          "WHERE provider IS NOT NULL AND concept_id IS NOT NULL")) # 4552353
+```
+
+## Category Creation
+
+Set NA values for Area and Vertex percentiles to 0
+```{r null_zero_percentiles, results='hide'}
+dbExecute(con, paste(
+  "UPDATE week1",
+  "SET area_pctile = 0",
+  "WHERE area_pctile IS NULL"
+))
+dbExecute(con, paste(
+  "UPDATE week1",
+  "SET vertex_pctile = 0",
+  "WHERE vertex_pctile IS NULL"
+))
+```
+
+```{r}
+dbExecute(con, paste(
+  "CREATE OR REPLACE VIEW cat1 AS FROM",
+  "(SELECT id, spatial_bool::UTINYINT || temporal_bool::UTINYINT || sort_bool::UTINYINT || (area_pctile>0.99)::UTINYINT || (vertex_pctile>0.99)::UTINYINT AS test_cat,",
+  "spatial_bool, temporal_bool, sort_bool, sort_count, polygon_area, vertex_count, cmr_took, prov_coll",
+  "FROM week1",
+  "WHERE concept == 'granules')"
+))
+```
+
+### Category Summaries
+
+Example query rows with categorization
+```{r}
+dbGetQuery(con, "SELECT test_cat, spatial_bool, temporal_bool, sort_bool, sort_count, polygon_area, vertex_count, cmr_took FROM cat1 ORDER BY cmr_took DESC LIMIT 1000")
+```
+```{r time_by_cat_old, include=FALSE}
+time_by_cat = dbGetQuery(con, "SELECT test_cat, COUNT(*) AS count, AVG(cmr_took) AS mean_cmr_took FROM cat1 GROUP BY test_cat ORDER BY mean_cmr_took")
+setDT(time_by_cat)
+time_by_cat
+```
+
+Summarize query time by category
+```{r time_by_cat}
+time_by_cat = dbGetQuery(con, paste(
+  "SELECT test_cat,",
+  "COUNT(*) AS count, AVG(cmr_took) AS mean_cmr_took,",
+  "substring(test_cat,1,1)::LOGICAL AS Spatial,",
+  "substring(test_cat,2,1)::LOGICAL AS Temporal,",
+  "substring(test_cat,3,1)::LOGICAL AS Sort,",
+  "substring(test_cat,4,1)::LOGICAL AS Area99,",
+  "substring(test_cat,5,1)::LOGICAL AS Vertex99",
+  "FROM cat1 GROUP BY test_cat ORDER BY mean_cmr_took"))
+setDT(time_by_cat)
+time_by_cat
+```
+
+Take a look at 10110's provider/collection ratio
+- spatial, sort, 99th percentile area
+```{r}
+dbGetQuery(con, "SELECT COUNT(*) AS count, prov_coll, AVG(cmr_took) AS mean_cmr_took FROM cat1 WHERE test_cat == '10110' GROUP BY prov_coll")
+```
+### Current test suite coverage
+
+Check percentile of the vertex count and area of CA shape used in benchmark suite
+
+```{r}
+paste("CA shape vertex percentile:", ecdf_fn_vert_count(426)) # 0.9998834
+ca_wkt = readLines("tmp_ca_verts")
+ca_shp = st_as_sfc(ca_wkt, crs = "EPSG:4326")
+#st_area(ca_shp) # 410506579297 [m^2]
+suppressMessages(sf_use_s2(FALSE))
+ca_area = st_area(ca_shp)
+paste("CA shape area percentile:  ", ecdf_fn_area(ca_area)) # 410680461757 [m^2]
+ca_bbox_area = st_area(st_as_sfc("POLYGON ((-124.409202 32.531669, -114.119061 32.531669, -114.119061 41.99954, -124.409202 41.99954, -124.409202 32.531669))", crs = "EPSG:4326"))
+paste("CA BBOX area percentile:   ", ecdf_fn_area(ca_bbox_area))
+suppressMessages(sf_use_s2(TRUE))
+```
+spatial_bool, temporal_bool, sort_bool, polygon_area, vertex_count
+```{r categorized_benchmark_suite}
+bigstac_suite8 = c(
+  BBOX_time_sort_largeArea = "11110",
+  shape_time_sort_largeArea_largeVertex = "11111",
+  time_sort = "01100",
+  BBOX_time_largeArea = "11010",
+  shape_time_largeArea_largeVertex = "11011",
+  time = "01000"
+)
+dtSuite8 = stack(bigstac_suite8)
+setDT(dtSuite8)
+setnames(dtSuite8, new = c("test_cat", "test_type"))
+dtSuite8
+```
+Note that we tested with a shape that is both very complex in vertices and very large area - a combination that was not seen in the query data.
+```{r benchmark_categories_log_summary}
+setkey(time_by_cat, "test_cat")
+setkey(dtSuite8, "test_cat")
+time_by_cat[dtSuite8, .(test_cat, count, mean_cmr_took, test_type)]
+```
+```{r coverage1}
+paste("The latest benchmark suite would cover",
+      scales::label_percent()(time_by_cat[dtSuite8, sum(count, na.rm = TRUE)]/time_by_cat[, sum(count)]),
+      "of queries")
+```
+
+
+```{r non_covered_classes}
+non_covered_classes = time_by_cat[!dtSuite8][order(mean_cmr_took)]
+non_covered_classes
+```
+
+But a large portion of the queries are trivial - ones with zero or few parameters that return quickly.
+What proportion of the queries does the benchmark suite cover if we exclude the two classes with the fastest processing time and large number of queries? "10000" and "00000"
+```{r coverage2}
+paste("The latest benchmark suite would cover",
+      scales::label_percent()(time_by_cat[dtSuite8, sum(count, na.rm = TRUE)]/
+                                time_by_cat[!test_cat %in% c("00000", "10000"), sum(count)]),
+      "of non-trivial queries")
+```
+
+### Categories of Interest
+
+We have 16 categories in this one week sample of CMR queries. For common categories, look at their probability distributions for CMR processing time.
+
+Below is a table of the most common categories. 
+
+```{r most_common_categories}
+time_by_cat[order(-count)]
+```
+
+We will use the top 6 categories, which each have over 1 million queries.
+
+```{r}
+cat6 = time_by_cat[order(-count)][1:6, test_cat]
+cat6
+```
+
+Which of these are in the current benchmark suite?
+```{r}
+dtSuite8[test_cat %in% cat6]
+```
+
+Which categories in the benchmark suite are not in the top 6 most common categories?
+```{r}
+dtSuite8[!test_cat %in% cat6]
+```
+
+```{r}
+time_by_cat[test_cat %in% cat6]
+time_by_cat[test_cat %in% dtSuite8$test_cat]
+```
+
+### Density of CMR time by query categories
+```{r}
+dtCatTime = dbGetQuery(con, "SELECT test_cat, cmr_took FROM cat1")
+setDT(dtCatTime)
+dtCatTime = dtCatTime[!is.na(cmr_took)] # 97% of granule query REPORTs include `cmr_took`
+setkey(dtCatTime, "test_cat")
+```
+
+```{r}
+dtCatTimeSub = dtCatTime[test_cat %in% cat6]
+dtCatTimeSub[, test_cat := as.factor(test_cat)]
+p_dens_cats <- ggplot(dtCatTimeSub, aes(cmr_took, color = test_cat, fill = test_cat))+
+  geom_density(alpha = 0.06) +
+  xlim(c(0,2500)) + 
+  labs(color='Category', fill = 'Category') +
+  guides(color = guide_legend(position = "inside"))
+```
+```{r}
+p_dens_cats + theme(legend.position.inside = c(0.93, 0.75))
+```
+
+
+
+## Other Analysis
+
+```{r}
+col.par = function(n) sample(seq(0.3, 1, length.out=50),n)
+```
+
+### Concept Types
+
+```{r bar_concept_type, out.width="50%"}
+dtPlot = dbGetQuery(con, "SELECT concept FROM week1")
+setDT(dtPlot)
+dtPlot = dtPlot[, .(count = .N), by = concept]
+dtPlot = dtPlot[order(-count)][1:10]
+dtPlot[concept == "", concept := "NA"]
+cols = rainbow(10, s=col.par(10), v=col.par(10))
+ggplot(dtPlot, aes(x=reorder(concept,-count), y=count, fill = as.factor(concept))) + 
+  geom_bar(stat = "identity") + 
+  scale_fill_manual(values=cols) +
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none") + 
+  xlab("concept type") +
+  ggtitle("Top 10 Concept Types (N = 30,694,912)", 
+          subtitle = "First week of October 2024")
+```
+
+  
