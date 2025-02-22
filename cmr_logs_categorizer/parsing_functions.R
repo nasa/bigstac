@@ -238,9 +238,11 @@ convert_bbox_column <- function(dt,
   column_class = class(dt[, eval(in_column)])
   # Calculate non-missing bounding box WKT values
   if(column_class == "list"){
-    i_condition = dt[sapply(get(in_column), length) > 0 & is.na(out_column), which = TRUE]
+    i_condition = dt[sapply(get(in_column), length) > 0 & is.na(get(out_column)),
+                     which = TRUE]
   } else if(column_class == "character"){
-    i_condition = dt[!is.na(get(in_column)) & is.na(out_column), which = TRUE]
+    i_condition = dt[!is.na(get(in_column)) & is.na(get(out_column)),
+                     which = TRUE]
   } else {
     stop(paste("Unsupported column type", column_class))
   }
