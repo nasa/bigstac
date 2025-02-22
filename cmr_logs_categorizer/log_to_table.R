@@ -141,8 +141,8 @@ dt[is.na(time_query), time_query := melt_time[.SD, facet_date, on = .(id)]]
 
 ## Provider ----
 
-columns_provider = grep('params.provider', ignore.case = TRUE, names(dt), 
-                        value = TRUE)
+columns_provider = grep('^(provider)$|params.provider', ignore.case = TRUE, 
+                        names(dt), value = TRUE)
 dt[, provider := combine_columns_get_nonNA(.SD, columns_provider, TRUE)]
 # Some have additonal parameters after a quote that were not parsed separately
 dt[, provider := str_split_i(provider, '"', 1)]
@@ -155,21 +155,21 @@ dt[str_detect(provider, "[^a-zA-Z0-9_]"), provider := "INVALID"]
 
 ## Sort key ----
 
-columns_sortkey = grep('params.sort_key', ignore.case = TRUE, names(dt),
-                       value = TRUE)
+columns_sortkey = grep('^(sort.key)$|params.sort.key', names(dt), 
+                       ignore.case = TRUE, value = TRUE)
 dt[, sort_key := combine_columns_get_nonNA(.SD, columns_sortkey, TRUE)]
 
 # # XXX CONSIDER FOR REPORT
 # dt[, .N, by = sort_key][order(-N)]
 
 ## Page size page num ----
-columns_page_size = grep('params.(page_size|pageSize)', ignore.case = TRUE, 
-                         names(dt), value = TRUE)
+columns_page_size = grep('^(page.size)$|params.(page.size|pageSize)', 
+                         ignore.case = TRUE, names(dt), value = TRUE)
 dt[, page_size := as.integer(
   combine_columns_get_nonNA(.SD, columns_page_size, TRUE))]
 
-columns_page_num = grep('params.page_num', ignore.case = TRUE, names(dt), 
-                         value = TRUE)
+columns_page_num = grep('^(page.num)$|params.page.num', 
+                        ignore.case = TRUE, names(dt), value = TRUE)
 dt[, page_num := as.integer(
   combine_columns_get_nonNA(.SD, columns_page_num, TRUE))]
 
@@ -178,8 +178,8 @@ dt[, page_num := as.integer(
 # dt[, .N, by = page_num][order(-N)]
 
 ## Version ----
-columns_version = grep('params.version', ignore.case = TRUE, names(dt), 
-                         value = TRUE) # exludes options.version..pattern
+columns_version = grep('^(version)$|params.version', ignore.case = TRUE, 
+                       names(dt), value = TRUE)
 dt[, version := combine_columns_get_nonNA(.SD, columns_version, TRUE)]
 # Some are unintentional user or client app inputs, mark these as INVALID
 dt[# keep strings with Near-Real-Time
@@ -192,15 +192,16 @@ dt[# keep strings with Near-Real-Time
 # dt[, .N, by = version][order(-N)]
 
 ## Short name ----
-columns_short_name = grep('params.short_name', ignore.case = TRUE, names(dt), 
-                        value = TRUE)
+columns_short_name = grep('^(short.name)$|params.short.name', 
+                          ignore.case = TRUE, names(dt), value = TRUE)
 dt[, short_name := combine_columns_get_nonNA(.SD, columns_short_name, TRUE)]
 
 # # XXX CONSIDER FOR REPORT
 # dt[, .N, by = short_name][order(-N)]
 
 ## Concept ID ----
-columns_concept_id = grep(pattern = paste0(c(
+columns_concept_id = grep(pattern = paste(c(
+  '^(concept.id)$',
   'params.collectionConceptId',
   'params.concept.id',
   'params.collection.concept.id',
