@@ -587,6 +587,27 @@ ggplot(dtPlot, aes(x=reorder(concept,count), y=count, fill = as.factor(concept))
   coord_flip()
 ```
 
+### Format
+
+```{r bar_format_type}
+dtPlot = dbGetQuery(con, "SELECT format FROM week1")
+setDT(dtPlot)
+dtPlot = dtPlot[, .(count = .N), by = format]
+unique_count = dtPlot[, .N]
+dtPlot = dtPlot[order(-count)]
+ggplot(dtPlot, aes(x=reorder(format,count), y=count, fill = as.factor(format))) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(x=reorder(format,count), y=count, label = format(
+    count, big.mark = ',')), nudge_y = 870000) + 
+  scale_y_continuous(expand = c(0.02, 0), limits = c(0,1.05e+07),
+                     labels = \(l) format(l, scientific = FALSE, big.mark=',')) +
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none", axis.title=element_blank()) + 
+  ggtitle("Format Types", 
+          subtitle = "First week of October 2024. N = 30,694,912") +
+  coord_flip()
+```
+
 ### Method
 
 ```{r bar_method}
@@ -767,7 +788,6 @@ ggplot(dtPlot, aes(x=bin, y=counts)) +
   geom_bar(stat = "identity", fill = "#781399") + 
   # `limits` sets the order, otherwise would be alphabetical
   scale_x_discrete(limits = dtPlot$bin) + 
-  #scale_y_continuous(breaks = seq(0,6e+05,2e+05), labels = \(l) format(l, scientific = FALSE, big.mark=',')) + 
   scale_y_continuous(labels = \(l) format(l, scientific = FALSE, big.mark=',')) + 
   ylab("count") + 
   theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
