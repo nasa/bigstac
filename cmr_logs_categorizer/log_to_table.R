@@ -213,8 +213,8 @@ dt[, concept_id := combine_columns_get_nonNA(.SD, columns_short_name, TRUE)]
 # dt[, .N, by = concept_id][order(-N)]
 
 ## Instrument ----
-columns_instrument = grep('params.instrument', ignore.case = TRUE, names(dt), 
-                          value = TRUE)
+columns_instrument = grep('^(instrument)$|params.instrument', ignore.case = TRUE,
+                          names(dt), value = TRUE)
 dt[, instrument := combine_columns_get_nonNA(.SD, columns_instrument, TRUE)]
 
 # # XXX CONSIDER FOR REPORT
