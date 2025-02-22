@@ -200,8 +200,13 @@ dt[, short_name := combine_columns_get_nonNA(.SD, columns_short_name, TRUE)]
 # dt[, .N, by = short_name][order(-N)]
 
 ## Concept ID ----
-columns_concept_id = grep('params.concept_id|params.collection_concept_id', 
-                          ignore.case = TRUE, names(dt), value = TRUE)
+columns_concept_id = grep(pattern = paste0(c(
+  'params.collectionConceptId',
+  'params.concept.id',
+  'params.collection.concept.id',
+  'params.echo.collection.id'),
+  collapse = '|'), 
+  names(dt), ignore.case = TRUE, value = TRUE)
 dt[, concept_id := combine_columns_get_nonNA(.SD, columns_short_name, TRUE)]
 
 # # XXX CONSIDER FOR REPORT
