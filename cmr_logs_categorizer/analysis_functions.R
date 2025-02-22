@@ -53,7 +53,6 @@ wkt_area <- function(wkt_column, transform_crs = "EPSG:4326"){
 #'   the `threshold_above` value and 1.
 in_quantile <- function(data, threshold_above){
   if(threshold_above < 0 | threshold_above > 1) stop("threshold_above must be between 0 and 1")
-  probvec = c(0, threshold_above, 1)
-  quants = quantile(data, na.rm = TRUE, probs = probvec)
-  data >= quants[2] 
+  quants = quantile(data, na.rm = TRUE, probs = threshold_above)
+  data >= quants 
 }
