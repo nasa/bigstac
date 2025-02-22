@@ -2,15 +2,14 @@
 title: "Categorize CMR Queries"
 output: 
   html_document:
-    TOC: TRUE
-    fig_width: 6
-    fig_height: 4
+    toc: true
+    toc_depth: 3
+    toc_float: 
+       collapsed: false
+    fig_width: 9
+    fig_height: 6
+    df_print: paged
 ---
-
-```{r setup, include=FALSE, echo=FALSE}
-# knitr::opts_knit$set(root.dir = '../dev/log_parsing')
-```
-
 
 ```{r sources}
 suppressPackageStartupMessages({
