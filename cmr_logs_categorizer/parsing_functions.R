@@ -182,11 +182,15 @@ bbox_to_polygon <- function(column){
   if(initial_s2_state) suppressMessages(sf_use_s2(FALSE))
   # Run anonymous function on every logged bounding box query
   bbox_features = lapply(column, function(value){
+    options(warn = 2) # treat warnings, such as NA coercion, as errors
     # Inner lapply enables handling lists of multiple bounding boxes per query
     lapply(value, function(v){
       tryCatch({
         # Convert CSV string to four numbers
         bbox_num = as.numeric(str_split_1(v, pattern = ','))
+        if((length(bbox_num) != 4) | (any(is.na(bbox_num)))) {
+          stop("Invalid bbox coordinates")
+        }
         # Convert numeric vector to bounding box object
         bbox = st_bbox(c(
           xmin = bbox_num[1], 
@@ -204,13 +208,19 @@ bbox_to_polygon <- function(column){
     }
     )
   })
+  options(warn = 0) # switch back to default warning behavior
   out_wkt = sapply(bbox_features, function(x){
     # Convert (multi)polygon versions of bounding boxes to WKT
-    geom_list = st_sfc(unlist(x, recursive = FALSE))
-    if(length(geom_list) > 1){
-      st_as_text(st_combine(geom_list)) # MULTIPOLYGON
+    unlisted = unlist(x, recursive = FALSE)
+    if(class(unlisted) == 'character'){
+      unlisted # Return errors as-is
     } else {
-      st_as_text(geom_list) # POLYGON
+      geom_list = st_sfc(unlisted)
+      if(length(geom_list) > 1){
+        st_as_text(st_combine(geom_list)) # MULTIPOLYGON
+      } else {
+        st_as_text(geom_list) # POLYGON
+      }
     }
   })
   if(initial_s2_state) suppressMessages(sf_use_s2(TRUE))
