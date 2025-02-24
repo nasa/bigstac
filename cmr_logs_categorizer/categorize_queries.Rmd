@@ -110,6 +110,29 @@ if(modifyDB) {
 }
 ```
 
+#### Uploaded Shapefiles
+
+We've only parsed spatial queries that were passed as coordiantes through CMR, but users can also upload shapefiles. While running in production, CMR does not log the details of these geometries. That means we can't determine their location, area, or vertex complexity after the fact.
+
+It's certainly possible that uploaded shapefiles differ in complexity from the geometries provided as coordinates to the CMR API. However, these represent a relatively small proportion of all spatial queries.
+
+Running the `count_shapefiles.sh` script finds log entries that indicate a shapefile was uploaded, and then `sum_shapes.sh` will total these up. The following compares the count of spatial queries using uploaded shapefiles vs. those providing coordinates directly to the CMR API:
+
+```{r sum_shapes, results='hold'}
+uploaded_shape_count = system2(
+  "./sum_shapes.sh", log_export_directory, stdout = TRUE)
+parsed_wkt_count = dbGetQuery(
+  con, "SELECT COUNT(*) FROM week1 WHERE spatial_bool = TRUE")
+cat(paste(
+  format(uploaded_shape_count, big.mark=','), 
+  "shapes were uploaded to CMR for which we do not have coordinates.\n"))
+cat(paste(
+  format(parsed_wkt_count, big.mark=','), 
+  "spatial queries with coordinates were successfully parsed."))
+```
+
+Because we don't have the coordiantes for these `r uploaded_shape_count` queries, they are not counted in the spatial boolean or spatial complexity variables.
+
 ### Spatial complexity
 
 #### Vertex Count
@@ -470,10 +493,6 @@ dtSuite8
 ```
 
 The California shape we used in benchmarks was 99th percentile complex in terms of both vertex count and area (categories codes ending in `11`). That combination was not seen in any of the 18 million granule queries in the week of data we've analyzed here, which is why those two categories have NA values in the join result below.
-
-However, we've only parsed the logs that exist in Cloudwatch. Uploaded shapefiles are only logged when CMR is running in debug mode, not in production. It's certainly possible that uploaded shapefiles tend to be more complex than ones that are drawn in Earthdata Search or provided as well-known text. Uploaded files are a very small proportion of total spatial queries, however.
-
-**TODO**: calculate proportion in the document
 
 ```{r benchmark_categories_log_summary}
 setkey(p_cats, "test_cat")
