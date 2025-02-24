@@ -36,7 +36,7 @@ dt[, id := .I]
 
 # Columns to retain that don't need transformed ----
 # Note "now" is a string and would need converted to time for analysis
-columns_keep = c("now", "status", "method", "client.id")
+columns_keep = c("now", "status", "method", "client.id", "request.id")
 
 # ///////////////////////////////////////
 # Process root properties            ----
