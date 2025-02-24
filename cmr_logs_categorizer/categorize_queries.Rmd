@@ -104,7 +104,7 @@ if(modifyDB) { dbExecute(con, paste(
 
 There are several attributes of CMR queries that we expect may be relevant to CMR query performance. These include whether the user included a spatial query, how complex the shape is, the presence of a temporal query, and the presence of specified sort order(s).
 
-First, calculate these indicator variables for all the queries in the sample. Then consider their joint presence/absense to group them into broad categories.
+First, calculate these indicator variables for all the queries in the sample. Then consider their joint presence/absence to group them into broad categories.
 
 ### Spatial boolean
 
@@ -122,7 +122,7 @@ if(modifyDB) {
 
 #### Uploaded Shapefiles
 
-We've only parsed spatial queries that were passed as coordiantes through CMR, but users can also upload shapefiles. While running in production, CMR does not log the details of these geometries. That means we can't determine their location, area, or vertex complexity after the fact.
+We've only parsed spatial queries that were passed as coordinates through CMR, but users can also upload shapefiles. While running in production, CMR does not log the details of these geometries. That means we can't determine their location, area, or vertex complexity after the fact.
 
 It's certainly possible that uploaded shapefiles differ in complexity from the geometries provided as coordinates to the CMR API. However, these represent a relatively small proportion of all spatial queries.
 
@@ -141,7 +141,7 @@ cat(paste(
   "spatial queries with coordinates were successfully parsed."))
 ```
 
-Because we don't have the coordiantes for these `r uploaded_shape_count` queries, they are not counted in the spatial boolean or spatial complexity variables.
+Because we don't have the coordinates for these `r uploaded_shape_count` queries, they are not counted in the spatial boolean or spatial complexity variables.
 
 ### Spatial complexity
 
@@ -514,7 +514,7 @@ The following categories in the logged CMR queries were not covered by the lates
 p_cats[!dtSuite8][order(p0.5)]
 ```
 
-But a large portion of these queries are easier than others: the ones in the `00000` category have none of the query paramaters we've selected as being interesting for performance. What proportion of the queries does the benchmark suite cover if we exclude this category with the fastest median processing time and the largest number of queries?
+But a large portion of these queries are easier than others: the ones in the `00000` category have none of the query parameters we've selected as being interesting for performance. What proportion of the queries does the benchmark suite cover if we exclude this category with the fastest median processing time and the largest number of queries?
 
 ```{r coverage2}
 paste("The latest benchmark suite would cover",
