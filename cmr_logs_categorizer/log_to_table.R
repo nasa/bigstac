@@ -50,9 +50,6 @@ dt[str_detect(concept, 'php'), concept := 'PHP']
 # Remove extensions (formats) from concepts
 dt[str_detect(concept, '\\.'), concept := str_split_i(concept, '\\.', 1)]
 dt[ , format := matchExtension(uri)]
-# # XXX CONSIDER FOR REPORT
-# dt[, .N, by = concept][order(-N)]
-# dt[, .N, by = format][order(-N)]
 
 ## Extract and simplify user agent ----
 dt[, user_agent_type := str_split_i(substr(user.agent,1,80),'/',1)]
@@ -66,20 +63,14 @@ dt[str_detect(user_agent_type, "[P|p]ython|PycURL"), user_agent_type := "Python"
 # TODO: find a package that can better parse user agents to id specific browsers
 dt[str_detect(user_agent_type, "[M|m]ozilla"), 
    user_agent_type := "Web Browser"]
-# # XXX CONSIDER FOR REPORT
-# dt[, .N, by = user_agent_type][order(-N)]
 
 ## Convert cmr.took to numeric type ----
 dt[, cmr_took := as.numeric(cmr.took)]
 # Remove the old version with . in the name to avoid confusion
 dt[, cmr.took := NULL]
-# # XXX CONSIDER FOR REPORT
-# summary(dt$cmr_took)
 
 ## Record whether cmr.search.after was provided ----
 dt[, used_search_after := !is.na(cmr.search.after)]
-# # XXX CONSIDER FOR REPORT
-# dt[, .N, by = used_search_after]
 
 # ///////////////////////////////////////
 # Process temporal queries           ----
@@ -132,9 +123,6 @@ melt_time[str_detect(facet_date, "NA"),
 # Insert dates from facets into the temporal query column where it doesn't already have values
 dt[is.na(time_query), time_query := melt_time[.SD, facet_date, on = .(id)]]
 
-# # XXX CONSIDER FOR REPORT
-# dt[, .N, by = .(has_temporal_query = !is.na(time_query))]
-
 # ///////////////////////////////////////
 # Process form-params & query-params ----
 # ///////////////////////////////////////
@@ -150,17 +138,11 @@ dt[, provider := str_split_i(provider, "'", 1)]
 # Some are unintentional user or client app inputs, mark these as INVALID
 dt[str_detect(provider, "[^a-zA-Z0-9_]"), provider := "INVALID"]
 
-# # XXX CONSIDER FOR REPORT
-# dt[, .N, by = provider][order(-N)]
-
 ## Sort key ----
 
 columns_sortkey = grep('^(sort.key)$|params.sort.key', names(dt), 
                        ignore.case = TRUE, value = TRUE)
 dt[, sort_key := combine_columns_get_nonNA(.SD, columns_sortkey, TRUE)]
-
-# # XXX CONSIDER FOR REPORT
-# dt[, .N, by = sort_key][order(-N)]
 
 ## Page size page num ----
 columns_page_size = grep('^(page.size)$|params.(page.size|pageSize)', 
@@ -173,10 +155,6 @@ columns_page_num = grep('^(page.num)$|params.page.num',
 dt[, page_num := as.integer(
   combine_columns_get_nonNA(.SD, columns_page_num, TRUE))]
 
-# # XXX CONSIDER FOR REPORT
-# dt[, .N, by = page_size][order(-N)]
-# dt[, .N, by = page_num][order(-N)]
-
 ## Version ----
 columns_version = grep('^(version)$|params.version', ignore.case = TRUE, 
                        names(dt), value = TRUE)
@@ -188,16 +166,10 @@ dt[# keep strings with Near-Real-Time
    str_detect(version, regex("[^a-zA-Z0-9_.,]")), 
    version := "INVALID"]
 
-# # XXX CONSIDER FOR REPORT
-# dt[, .N, by = version][order(-N)]
-
 ## Short name ----
 columns_short_name = grep('^(short.name)$|params.short.name', 
                           ignore.case = TRUE, names(dt), value = TRUE)
 dt[, short_name := combine_columns_get_nonNA(.SD, columns_short_name, TRUE)]
-
-# # XXX CONSIDER FOR REPORT
-# dt[, .N, by = short_name][order(-N)]
 
 ## Concept ID ----
 columns_concept_id = grep(pattern = paste(c(
@@ -210,16 +182,10 @@ columns_concept_id = grep(pattern = paste(c(
   names(dt), ignore.case = TRUE, value = TRUE)
 dt[, concept_id := combine_columns_get_nonNA(.SD, columns_short_name, TRUE)]
 
-# # XXX CONSIDER FOR REPORT
-# dt[, .N, by = concept_id][order(-N)]
-
 ## Instrument ----
 columns_instrument = grep('^(instrument)$|params.instrument', ignore.case = TRUE,
                           names(dt), value = TRUE)
 dt[, instrument := combine_columns_get_nonNA(.SD, columns_instrument, TRUE)]
-
-# # XXX CONSIDER FOR REPORT
-# dt[, .N, by = instrument][order(-N)]
 
 # ///////////////////////////////////////
 # Process spatial queries            ----
