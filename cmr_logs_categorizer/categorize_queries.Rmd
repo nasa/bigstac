@@ -527,43 +527,46 @@ However, we wouldn't want to exclude this category from consideration during the
 
 ## Selecting Categories of Interest
 
-We have 16 categories in this one week sample of CMR queries. Below is a table of the most common categories.
+We have `r p_cats[, .N]` categories in this one week sample of CMR queries. Below is a table of the most common categories.
 
 ```{r most_common_categories}
 p_cats[order(-count)]
 ```
 
-```{r top_six_cats_percentage}
-top_six_percentage = p_cats[order(-count)][1:6, sum(count)]/p_cats[, sum(count)]
-top_six_percentage
+```{r top_cats_percentage}
+top_count = 6
+top_cats_percentage = p_cats[order(-count)][1:top_count, sum(count)]/p_cats[, sum(count)]
+top_cats_percentage
 ```
 
-We need to keep in mind some existing realistic query patterns when designing Bigstac. If we were to focus on the top 6 most common categories, they would represent `r scales::label_percent()(top_six_percentage)` of the queries.
+We need to keep in mind some existing realistic query patterns when designing Bigstac. If we were to focus on the top `r top_count` most common categories, they would represent `r scales::label_percent()(top_cats_percentage)` of the queries. After the top `r top_count` categories, there is a larger drop in query counts.
 
 ```{r top_size_cats}
-cat6 = p_cats[order(-count)][1:6, test_cat]
-cat6
+top_cats = p_cats[order(-count)][1:top_count, test_cat]
+top_cats
 ```
 
-Which of these are in the current benchmark suite?
+Top `r top_count` categories
 
-```{r top_six_in_suite}
-dtSuite8[test_cat %in% cat6]
+```{r top_cats}
+p_cats[test_cat %in% top_cats]
+```
+### Relative to benchmark suite categories
+
+Which of the top `r top_count` categories are in the current benchmark suite?
+
+```{r top_in_suite}
+dtSuite8[test_cat %in% top_cats]
 ```
 
-Which categories in the benchmark suite are not in the top 6 most common categories?
+Which categories in the benchmark suite are not in the top `r top_count` most common categories?
 
-```{r suite_not_in_top_six}
-dtSuite8[!test_cat %in% cat6]
+```{r suite_not_in_top}
+dtSuite8[!test_cat %in% top_cats]
 ```
+As discussed earlier, 2 of these are categories with both 99th percentile area and vertex counts, which were not observed in the logged queries at all.
 
-Top 6 categories
-
-```{r top6_cats}
-p_cats[test_cat %in% cat6]
-```
-
-Below are the 4 categories from the benchmark suite that exist in the log data. Note the most common category below is also in the top 6 set above.
+Below are the 4 categories from the benchmark suite that exist in the log data. Note the most common category below is also in the top `r top_count` set above.
 
 ```{r suite_cats}
 p_cats[test_cat %in% dtSuite8$test_cat]
@@ -572,7 +575,7 @@ p_cats[test_cat %in% dtSuite8$test_cat]
 ### Density of CMR time by query categories
 
 ```{r cmr_time_density_setup}
-dtCatTimeSub = dtCatTime[test_cat %in% cat6]
+dtCatTimeSub = dtCatTime[test_cat %in% top_cats]
 dtCatTimeSub[, test_cat := as.factor(test_cat)]
 p_dens_cats <- ggplot(dtCatTimeSub, aes(cmr_took, color = test_cat, fill = test_cat))+
   geom_density(alpha = 0.06) +
