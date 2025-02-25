@@ -11,6 +11,16 @@ output:
     df_print: paged
 ---
 
+**Questions?**  
+Contact [Johnathan Rush](mailto:johnathan.f.rush@nasa.gov), NASA EED-3
+
+```{css, echo=FALSE}
+/* Make the commentary text a little larger than code cells and cell output */
+p {
+  font-size: 16px;
+}
+```
+
 ```{r sources}
 suppressPackageStartupMessages({
   library(data.table)
@@ -514,7 +524,9 @@ The following categories in the logged CMR queries were not covered by the lates
 p_cats[!dtSuite8][order(p0.5)]
 ```
 
-But a large portion of these queries are easier than others: the ones in the `00000` category have none of the query parameters we've selected as being interesting for performance. What proportion of the queries does the benchmark suite cover if we exclude this category with the fastest median processing time and the largest number of queries?
+A large portion of these queries are easier than others: the ones in the `00000` category have none of the query parameters we've selected as being interesting for performance.
+
+What proportion of the queries does the benchmark suite cover if we exclude this category with the fastest median processing time and the largest number of queries?
 
 ```{r coverage2}
 paste("The latest benchmark suite would cover",
@@ -523,7 +535,8 @@ paste("The latest benchmark suite would cover",
       "of non-trivial queries")
 ```
 
-However, we wouldn't want to exclude this category from consideration during the design of Bigstac, given that it represents a plurality of queries. There is also significant variation within this category, as seen by the 1.3s difference between the 50th and 95th percentile performance. Possible routes for explanation of that variance would be looking at variables not included in the categories, like requested page size, or calculating a measurement of CMR load using a window function to count the number of queries received in the surrounding X minutes. Other possible explanations would not be in the `cmr-logs` log group, like load introduced by data ingestion.
+However, we wouldn't want to exclude this category from consideration during the design of Bigstac, given that it represents a plurality of queries.  
+There is also significant variation within this category, as seen by the greater than 1 second difference between the 50th and 95th percentile performance. Possible routes for explanation of that variance would be looking at variables not included in the categories, like requested page size, or calculating a measurement of CMR load using a window function to count the number of queries received in the surrounding X minutes. Other possible explanations would not be in the `cmr-logs` log group, like load introduced by data ingestion.
 
 ## Selecting Categories of Interest
 
@@ -551,7 +564,7 @@ Top `r top_count` categories
 ```{r top_cats}
 p_cats[test_cat %in% top_cats]
 ```
-### Relative to benchmark suite categories
+### Relative to benchmark suite
 
 Which of the top `r top_count` categories are in the current benchmark suite?
 
@@ -572,7 +585,7 @@ Below are the 4 categories from the benchmark suite that exist in the log data. 
 p_cats[test_cat %in% dtSuite8$test_cat]
 ```
 
-### Density of CMR time by query categories
+### Density of CMR time
 
 ```{r cmr_time_density_setup}
 dtCatTimeSub = dtCatTime[test_cat %in% top_cats]
@@ -586,7 +599,7 @@ p_dens_cats <- ggplot(dtCatTimeSub, aes(cmr_took, color = test_cat, fill = test_
 p_dens_cats
 ```
 
-## Other Analysis
+## Other Summaries
 
 ### Concept Types
 
