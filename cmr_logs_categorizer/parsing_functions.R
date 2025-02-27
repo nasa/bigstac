@@ -239,8 +239,6 @@ bbox_to_polygon <- function(column){
 #' @param in_column name of bounding box column
 #' @param out_column name of WKT output column
 #' @param geo_type_column name of geometry type column
-#'
-#' @returns copy of the data.table
 convert_bbox_column <- function(dt,
                                 in_column,
                                 out_column,
@@ -356,4 +354,63 @@ DEBUG_columninfo <- function(dt, column_names){
     }
   }
   invisible()
+}
+
+
+#' Iterate over a list of terms to match in table column names, copying values
+#' from matching columns to a common temporal query column.
+#'
+#' @param dt data.table containing temporal columns
+#' @param names_to_search charcter vector of strings to match in table column
+#'   names
+#' @param out_column name of output, combined temporal query column
+#' @param time_type_column name of time type column
+batch_convert_time_columns <- function(dt, 
+                                       names_to_search, 
+                                       out_column = "time_query",
+                                       time_type_column = "time_type") {
+  for(match_text in names_to_search){
+    # Table column names containing the current match_text
+    columns_match = grep(
+      match_text, names(dt), ignore.case = TRUE, value = TRUE)
+    # For each column, copy values to common temporal query column
+    for(column_name in columns_match){
+      convert_time_column(dt, 
+                          in_column = column_name, 
+                          time_type_value = match_text,
+                          out_column = out_column,
+                          time_type_column = time_type_column)
+    }
+  }
+}
+
+
+#' Copies values from various kinds of temporal queries to a common temporal query column in a data.table by reference.
+#'
+#' Only updates currently NA values of the output column.
+#'
+#' @param dt data.table containing temporal query column
+#' @param in_column name of input temporal column
+#' @param time_type_value string to describe the input temporal column
+#' @param out_column name of output, combined temporal query column
+#' @param time_type_column name of time type column
+convert_time_column <- function(dt,
+                                in_column,
+                                time_type_value,
+                                out_column = "time_query",
+                                time_type_column = "time_type") {
+  in_column = as.name(in_column)
+  column_class = class(dt[, eval(in_column)])
+  # Copy non-missing values from in_column over NA values in the time_query column
+  if(column_class == "list"){
+    i_condition = dt[sapply(get(in_column), length) > 0 & is.na(get(out_column)),
+                     which = TRUE]
+  } else if(column_class == "character"){
+    i_condition = dt[!is.na(get(in_column)) & is.na(get(out_column)),
+                     which = TRUE]
+  } else {
+    stop(paste("Unsupported column type", column_class))
+  }
+  dt[i_condition, (out_column) := eval(in_column)]
+  dt[i_condition, (time_type_column) := time_type_value]
 }

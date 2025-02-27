@@ -93,6 +93,9 @@ dt[, used_search_after := !is.na(cmr.search.after)]
 
 ## Combine temporal queries to a single column ----
 
+# Initialize `time_type` column with NA values
+dt[, time_type := NA_character_]
+
 # Columns with trailing '..' can be array versions of parameters, although
 # sometimes they only contain single values. Because they do not always store
 # multiple values, we'll check the column type before processing them
@@ -121,11 +124,14 @@ for(column_name in columns_temporal){
        time_query := get(column_name)] 
   }
 }
+# Keep track of where time is coming from
+dt[!is.na(time_query), time_type := "params.temporal"]
 
 ## Add temporal facets to time column ----
+
 columns_temporal_facets = grep("params.temporal_facet.*(year|month|day)",
                                names(dt), ignore.case = TRUE, value = TRUE)
-
+  
 # Combine the facet columns into a single date column
 melt_time = melt(dt, id.vars='id', 
                  measure.vars = columns_temporal_facets)[,
@@ -135,8 +141,26 @@ melt_time[facet_date == "NA-NA-NA", facet_date := NA_character_]
 # Remove NA portions of the facet date, keeping the year or year and month
 melt_time[str_detect(facet_date, "NA"), 
           facet_date := str_split_i(facet_date, "-NA", 1)]
-# Insert dates from facets into the temporal query column where it doesn't already have values
+# Insert dates from facets into the temporal query column where it doesn't
+# already have values
+na_time_before = dt[is.na(time_query), which = TRUE]
 dt[is.na(time_query), time_query := melt_time[.SD, facet_date, on = .(id)]]
+na_time_after = dt[is.na(time_query), which = TRUE]
+dt[setdiff(na_time_before, na_time_after), time_type := "params.temporal_facet"]
+
+# Other kinds of temporal queries ----
+
+# Only update the time_query column when it doesn't already have a value. 
+# This means that the sequence of the following names matters: if more than one
+# is present in a query, only the first will be used for the time query and time
+# query type.
+batch_convert_time_columns(
+  dt, names_to_search = c('equator.crossing.date',
+                          'params.revision.date',
+                          'params.updated.since',
+                          'params.production.date',
+                          'params.created.at'))
+
 
 # ///////////////////////////////////////
 # Process form-params & query-params ----
