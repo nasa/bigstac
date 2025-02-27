@@ -46,12 +46,25 @@ columns_keep = c(columns_keep, 'uri')
 
 ## Get requested concepts and formats from the URI ----
 
-dt[, concept := getPathByPos(uri, 1)]
+dt[, concept := uri]
+# Match list of known search API endpoints
+dt[, temp_concepts := str_extract(concept, cmr_endpoints_expression)]
+dt[!is.na(temp_concepts), concept := temp_concepts]
+dt[, temp_concepts := NULL]
 # Group all PHP requests together
-dt[str_detect(concept, 'php'), concept := 'PHP'] 
-# Remove extensions (formats) from concepts
-dt[str_detect(concept, '\\.'), concept := str_split_i(concept, '\\.', 1)]
-dt[ , format := matchExtension(uri)]
+dt[str_detect(concept, regex('\\.php', ignore_case = TRUE)), 
+   concept := "PHP requests"]
+# Group the default searches together
+dt[concept %in% c('/search', '/search/'), concept := 'search/']
+# Remove the leading `/search/` portion of non-default endpoints
+dt[str_detect(concept, '/search/') & str_length(concept) > 8, 
+   concept := str_split_i(concept, '/search/', 2)]
+# Handle DAAC data; E.g. retains "daac.ornl.gov/daacdata" portion of URI
+dt[str_detect(concept, 'daacdata'), 
+   concept := str_sub(concept, end = str_locate(concept, 'daacdata')[2])]
+
+# Determine requested format using the extensions from URI
+dt[ , format := matchExtension(uri)] 
 
 ## Extract and simplify user agent ----
 dt[, user_agent_type := str_split_i(substr(user.agent,1,80),'/',1)]

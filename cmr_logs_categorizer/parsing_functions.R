@@ -1,9 +1,9 @@
 # Functions to support log_to_table.R
 
-extensions = c('html', 'json', 'xml', 'echo10', 'iso', 'iso19115', 'dif',
+cmr_extensions = c('html', 'json', 'xml', 'echo10', 'iso', 'iso19115', 'dif',
                'dif10', 'csv', 'atom', 'opendata', 'kml', 'stac', 'native', 
                'umm-json', 'umm_json')
-extensionExpression = paste0('.', extensions, collapse = '|')
+cmr_extension_expression = paste0('.', cmr_extensions, collapse = '|')
 
 #' Matches the specified data format from the input URI
 #'
@@ -15,27 +15,28 @@ matchExtension <- function(uri){
     tempCount = str_count(uri, '/')
     if (is.na(tempCount)) { print(paste("NA for:", uri))}
     str_split_i(uri, "/", tempCount + 1)})
-  matched = str_match(lastPart, extensionExpression)
+  matched = str_match(lastPart, cmr_extension_expression)
   return(str_split_i(matched, '\\.', 2)) # remove period
 }
 
 
-#' Get the specified portion of an input URI
-#'
-#' @param uri URI string
-#' @param position numeric, the position of the desired portion of the URI
-#'
-#' @returns string of the specified position of the path
-getPathByPos <- function(uri, position = 1){
-  split <- sapply(uri, function(x) {
-    if (str_detect(x, "/search/")){
-      return(str_split_i(x, "/search/", 2))
-    } else {
-      return(x)
-    }
-  })
-  str_split_i(split, "/", position)
-}
+# Note the order of endpoints below is important. They are used as a pattern for
+# grepping, and the first match found will be the text that's retained. That
+# means longer strings containing a shorter word should appear in the list
+# before the shorter word.
+cmr_search_endpoints = c(
+  "granules/timeline", "granules", "csw/collections", "collections",
+  "provider_holdings", "autocomplete", "concepts", "humanizers", "tiles",
+  "keywords", "tags", "variables", "legacy-services", "services", "tools",
+  "subscriptions", "order-option-drafts", "grid-drafts", "variable-drafts",
+  "grids", "data-quality-summary-drafts", "tool-drafts", "order-options",
+  "data-quality-summaries", "collection-drafts", "service-drafts",
+  "community-usage-metrics", "associate", "health", "clear-cache", "caches", 
+  "clear-scroll", "browse-scaler", "site/collections/directory", "site/docs", 
+  "site/"
+)
+cmr_endpoints_expression = paste0(
+  '/search/', cmr_search_endpoints, collapse = '|')
 
 
 #' Combine columns into a single string
