@@ -29,6 +29,7 @@ suppressPackageStartupMessages({
   library(arrow)
   library(duckdb)
   library(ggplot2)
+  library(scales)
 })
 source('analysis_functions.R')
 ```
@@ -412,7 +413,7 @@ setkey(dtCatTime, "test_cat")
 missing_cmr_took = dtCatTime[is.na(cmr_took), .N]/dtCatTime[, .N]
 ```
 
-Around `r scales::label_percent()(missing_cmr_took)` of rows in this period are missing `cmr_took`. In the future, it may be worthwhile to fill those values with `duration` when it is available (not currently extracted into parquet files by `log_to_table.R`). The two values tend to be very similar.
+Around `r label_percent(accuracy = 0.1)(missing_cmr_took)` of rows in this period are missing `cmr_took`. In the future, it may be worthwhile to fill those values with `duration` when it is available (not currently extracted into parquet files by `log_to_table.R`). The two values tend to be very similar.
 
 ### CMR processing time percentiles
 
@@ -513,7 +514,7 @@ p_cats[dtSuite8, ]
 
 ```{r coverage1}
 paste("The latest benchmark suite would cover",
-      scales::label_percent()(
+      label_percent(accuracy = 0.1)(
         dtCatTime[dtSuite8, .N]/dtCatTime[, .N]),
       "of queries")
 ```
@@ -530,7 +531,7 @@ What proportion of the queries does the benchmark suite cover if we exclude this
 
 ```{r coverage2}
 paste("The latest benchmark suite would cover",
-      scales::label_percent()(dtCatTime[dtSuite8, .N]/
+      label_percent(accuracy = 0.1)(dtCatTime[dtSuite8, .N]/
                                 dtCatTime[!test_cat %in% c("00000"), .N]),
       "of non-trivial queries")
 ```
@@ -552,7 +553,7 @@ top_cats_percentage = p_cats[order(-count)][1:top_count, sum(count)]/p_cats[, su
 top_cats_percentage
 ```
 
-We need to keep in mind some existing realistic query patterns when designing Bigstac. If we were to focus on the top `r top_count` most common categories, they would represent `r scales::label_percent()(top_cats_percentage)` of the queries. After the top `r top_count` categories, there is a larger drop in query counts.
+We need to keep in mind some existing realistic query patterns when designing Bigstac. If we were to focus on the top `r top_count` most common categories, they would represent `r label_percent(accuracy = 0.1)(top_cats_percentage)` of the queries. After the top `r top_count` categories, there is a larger drop in query counts.
 
 ```{r top_size_cats}
 top_cats = p_cats[order(-count)][1:top_count, test_cat]
