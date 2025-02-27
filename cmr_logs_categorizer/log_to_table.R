@@ -79,10 +79,10 @@ dt[str_detect(user_agent_type, "[P|p]ython|PycURL"), user_agent_type := "Python"
 dt[str_detect(user_agent_type, "[M|m]ozilla"), 
    user_agent_type := "Web Browser"]
 
-## Convert cmr.took to numeric type ----
-dt[, cmr_took := as.numeric(cmr.took)]
-# Remove the old version with . in the name to avoid confusion
-dt[, cmr.took := NULL]
+## Query duration ----
+# cmr.took is missing part of the time. When both cmr.took and duration are both
+# present, their mean difference is around 2ms.
+columns_keep = c(columns_keep, 'duration')
 
 ## Record whether cmr.search.after was provided ----
 dt[, used_search_after := !is.na(cmr.search.after)]
