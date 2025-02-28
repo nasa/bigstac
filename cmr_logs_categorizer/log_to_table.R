@@ -25,7 +25,7 @@ in_full_path = args[1]
 if(!file.exists(in_full_path)) stop(paste(
   "File", in_full_path, "does not exist."), call. = FALSE)
 
-# Parse path and filename; use these later for writing output
+# Parse path and file name; use these later for writing output
 in_path = dirname(in_full_path)
 in_file = basename(in_full_path)
 
@@ -129,7 +129,7 @@ dt[!is.na(time_query), time_type := "params.temporal"]
 
 ## Add temporal facets to time column ----
 
-columns_temporal_facets = grep("params.temporal_facet.*(year|month|day)",
+columns_temporal_facets = grep("params.temporal.facet.*(year|month|day)",
                                names(dt), ignore.case = TRUE, value = TRUE)
   
 # Combine the facet columns into a single date column
@@ -146,7 +146,7 @@ melt_time[str_detect(facet_date, "NA"),
 na_time_before = dt[is.na(time_query), which = TRUE]
 dt[is.na(time_query), time_query := melt_time[.SD, facet_date, on = .(id)]]
 na_time_after = dt[is.na(time_query), which = TRUE]
-dt[setdiff(na_time_before, na_time_after), time_type := "params.temporal_facet"]
+dt[setdiff(na_time_before, na_time_after), time_type := "params.temporal.facet"]
 
 # Other kinds of temporal queries ----
 
@@ -171,7 +171,7 @@ batch_convert_time_columns(
 columns_provider = grep('^(provider)$|params.provider', ignore.case = TRUE, 
                         names(dt), value = TRUE)
 dt[, provider := combine_columns_get_nonNA(.SD, columns_provider, TRUE)]
-# Some have additonal parameters after a quote that were not parsed separately
+# Some have additional parameters after a quote that were not parsed separately
 dt[, provider := str_split_i(provider, '"', 1)]
 dt[, provider := str_split_i(provider, "'", 1)]
 # Some are unintentional user or client app inputs, mark these as INVALID
@@ -183,7 +183,7 @@ columns_sortkey = grep('^(sort.key)$|params.sort.key', names(dt),
                        ignore.case = TRUE, value = TRUE)
 dt[, sort_key := combine_columns_get_nonNA(.SD, columns_sortkey, TRUE)]
 
-## Page size page num ----
+## Page size and page num ----
 columns_page_size = grep('^(page.size)$|params.(page.size|pageSize)', 
                          ignore.case = TRUE, names(dt), value = TRUE)
 dt[, page_size := as.integer(
@@ -288,6 +288,32 @@ for(this_column in columns_points){
 na_wkt_after = dt[is.na(wkt), which = TRUE]
 dt[setdiff(na_wkt_before, na_wkt_after), geo_type := "POINT"]
 
+## 2D Grids ----
+columns_2d_grid = grep('two.d.coordinate.system.name', names(dt), 
+                       ignore.case = TRUE, value = TRUE)
+for(column_name in columns_2d_grid){
+  set_non_na_values(dt, column_name, "geo_type", '2D Grid')
+}
+
+## Orbits ----
+columns_orbit = grep('params.orbit.number', names(dt), 
+                     value = TRUE, ignore.case = TRUE)
+for(column_name in columns_orbit){
+  set_non_na_values(dt, column_name, "geo_type", 'orbit')
+}
+
+## Cycle/Pass ----
+columns_cycle_pass = grep('params.cycle|params.pass', names(dt), 
+                          value = TRUE, ignore.case = TRUE)
+for(column_name in columns_cycle_pass){
+  set_non_na_values(dt, column_name, "geo_type", 'cycle/pass')
+}
+
+## Other spatial notes ----
+# `equator_crossing_date` has some bearing on the position of the satellite
+# data, but for this analysis, we're considering it exclusively a temporal
+# selector.
+
 # Address spatial errors ----
 # `string_to_wkt` writes errors to output, which WKT readers can't handle
 # Move those errors to another column
@@ -299,8 +325,8 @@ dt[str_detect(wkt, "ERROR"), wkt := NA_character_]
 # ///////////////////////////////////////
 # TODO: append to `columns_transformed` throughout the script instead of all at once
 columns_transformed = c("id", "concept", "format", "user_agent_type", "cmr_took",
-                        "used_search_after", "time_query", "provider", "sort_key",
-                        "page_size", "page_num", "version", "short_name", 
+                        "used_search_after", "time_query", "time_type",  "provider", 
+                        "sort_key", "page_size", "page_num", "version", "short_name", 
                         "concept_id", "instrument", "wkt", "geo_type", "circle_radius")
 final_columns = c(columns_keep, columns_transformed, "error")
 final_columns = intersect(final_columns, names(dt))

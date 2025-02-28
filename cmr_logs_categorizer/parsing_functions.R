@@ -414,3 +414,32 @@ convert_time_column <- function(dt,
   dt[i_condition, (out_column) := eval(in_column)]
   dt[i_condition, (time_type_column) := time_type_value]
 }
+
+
+#' When the input column has a value and the output column is NA, set the output
+#' column to a constant value
+#'
+#' Used for columns that indicate something useful, but whose values we're not
+#' keeping. For example, we may want to know a user queried for orbits without
+#' needing to know which orbit numbers.
+#'
+#' @param dt data.table containing query logs
+#' @param in_column input column we are checking for values
+#' @param out_column output column that will receive constant value
+#' @param out_constant constant value to assign to output column
+set_non_na_values <- function(dt, in_column, out_column, out_constant) {
+  in_column = as.name(in_column)
+  column_class = class(dt[, eval(in_column)])
+  
+  if(column_class == "list"){
+    i_condition = dt[sapply(get(in_column), length) > 0 & is.na(get(out_column)),
+                     which = TRUE]
+  } else if(column_class == "character"){
+    i_condition = dt[!is.na(get(in_column)) & is.na(get(out_column)),
+                     which = TRUE]
+  } else {
+    stop(paste("Unsupported column type", column_class))
+  }
+  dt[i_condition, (out_column) := out_constant]
+}
+
