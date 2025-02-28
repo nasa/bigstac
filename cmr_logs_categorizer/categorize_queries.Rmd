@@ -76,10 +76,10 @@ columns_except_id = paste(setdiff(column_names, "id"), collapse = ", ")
 Load parquet data into database file
 
 ```{r create_db, results='hide'}
-if(modifyDB) { dbExecute(con, paste(
-  'CREATE OR REPLACE TABLE week1 AS FROM (SELECT', 
+if(modifyDB) { dbExecute(con, paste0(
+  'CREATE OR REPLACE TABLE week1 AS FROM (SELECT ', 
   columns_except_id,
-  'FROM read_parquet("../dev/log_parsing/logs/**/*.parquet", union_by_name=true)',
+  ' FROM read_parquet("', log_export_directory, '/**/*.parquet", union_by_name=true) ',
   'ORDER BY now)')) }
 ```
 
@@ -127,7 +127,7 @@ if(modifyDB) {
   dbExecute(con, paste( 
             "UPDATE week1",
             "SET spatial_bool = TRUE",
-            "WHERE wkt IS NOT NULL"))
+            "WHERE geo_type IS NOT NULL"))
 }
 ```
 
@@ -386,8 +386,15 @@ if(modifyDB) {
 if(modifyDB) { 
   dbExecute(con, paste(
     "CREATE OR REPLACE VIEW cat1 AS FROM",
-    "(SELECT id, spatial_bool::UTINYINT || temporal_bool::UTINYINT || sort_bool::UTINYINT || (area_pctile>0.99)::UTINYINT || (vertex_pctile>0.99)::UTINYINT AS test_cat,",
-    "spatial_bool, temporal_bool, sort_bool, sort_count, polygon_area, vertex_count, cmr_took, prov_coll",
+    "(SELECT",
+    "id,",
+    # Create 5-bit binary category variable from 5 booleans
+    "spatial_bool::UTINYINT || temporal_bool::UTINYINT ||",
+      "sort_bool::UTINYINT || (area_pctile>0.99)::UTINYINT ||",
+      "(vertex_pctile>0.99)::UTINYINT",
+      "AS test_cat,",
+    "spatial_bool, temporal_bool, sort_bool, sort_count,",
+    "polygon_area, vertex_count, duration, prov_coll",
     "FROM week1",
     "WHERE concept == 'granules')"
   ))
@@ -399,21 +406,15 @@ if(modifyDB) {
 Example query rows with categorization
 
 ```{r example_queries_with_categories}
-(dbGetQuery(con, "SELECT test_cat, cmr_took, spatial_bool, temporal_bool, sort_bool, sort_count, polygon_area, vertex_count FROM cat1 ORDER BY cmr_took DESC LIMIT 100"))
+(dbGetQuery(con, "SELECT test_cat, duration, spatial_bool, temporal_bool, sort_bool, sort_count, polygon_area, vertex_count FROM cat1 ORDER BY duration DESC LIMIT 100"))
 ```
 
 ```{r dtCatTime}
-dtCatTime = dbGetQuery(con, "SELECT test_cat, cmr_took FROM cat1")
+dtCatTime = dbGetQuery(con, "SELECT test_cat, duration FROM cat1")
 setDT(dtCatTime)
-dtCatTime = dtCatTime[!is.na(cmr_took)]
+dtCatTime = dtCatTime[!is.na(duration)]
 setkey(dtCatTime, "test_cat")
 ```
-
-```{r missing_cmr_took, include=FALSE}
-missing_cmr_took = dtCatTime[is.na(cmr_took), .N]/dtCatTime[, .N]
-```
-
-Around `r label_percent(accuracy = 0.1)(missing_cmr_took)` of rows in this period are missing `cmr_took`. In the future, it may be worthwhile to fill those values with `duration` when it is available (not currently extracted into parquet files by `log_to_table.R`). The two values tend to be very similar.
 
 ### CMR processing time percentiles
 
@@ -421,7 +422,7 @@ Around `r label_percent(accuracy = 0.1)(missing_cmr_took)` of rows in this perio
 unique_cats = dtCatTime[, unique(test_cat)]
 cmr_percentile <- function(unique_cats, percentile){
   cat_perc = sapply(unique_cats, function(x){
-    quantile(dtCatTime[test_cat == x, cmr_took], probs = percentile)
+    quantile(dtCatTime[test_cat == x, duration], probs = percentile)
   })
   names(cat_perc) <- unique_cats
   dt = stack(cat_perc)
@@ -431,17 +432,18 @@ cmr_percentile <- function(unique_cats, percentile){
 }
 p50_cats = cmr_percentile(unique_cats, 0.5)
 p95_cats = cmr_percentile(unique_cats, 0.95)
+p99_cats = cmr_percentile(unique_cats, 0.99)
 
 # Calculate count of queries per category
 counts_cats = dtCatTime[, .(count = .N), by = test_cat]
 
-p_cats = p50_cats[p95_cats][counts_cats]
+p_cats = p50_cats[p95_cats][p99_cats][counts_cats]
 ```
 
 Add columns explaining the binary coded category values
 
 ```{r percentile_by_category}
-p_cats = p_cats[, .(test_cat, count, p0.5, p0.95, 
+p_cats = p_cats[, .(test_cat, count, p0.5, p0.95, p0.99,
   Spatial = as.logical(as.integer(str_sub(test_cat,1,1))),
   Temporal = as.logical(as.integer(str_sub(test_cat,2,2))),
   Sort = as.logical(as.integer(str_sub(test_cat,3,3))),
@@ -471,20 +473,35 @@ Our benchmark suite used two spatial features: a polygon of California (a simpli
 Check percentile of the vertex count and area of CA shape used in benchmark suite:
 
 ```{r ca_percentiles, results='hold'}
-paste("CA shape vertex percentile:", ecdf_fn_vert_count(426)) # 0.9998834
-ca_wkt = readLines("tmp_ca_verts")
-ca_shp = st_as_sfc(ca_wkt, crs = "EPSG:4326")
-#st_area(ca_shp) # 410506579297 [m^2] using S2 (spherical)
+ca_raw = system2(
+  command = "jq", 
+  args = paste(
+    "'.tests[] |",
+    "select(.name==\"MBR-LIR-California_simplified-time_Since2020-SortBy_GranuleUR\")",
+    "| .raw' ../tester/suite8.json"), 
+  stdout = TRUE)
+ca_wkt = str_sub(ca_raw, 
+                 str_locate(ca_raw, "MULTIPOLYGON")[1], 
+                 str_locate(ca_raw, "'::GEOMETRY")[1]-1)
 
-# The area calculations in DuckDB used the GEOS library, which is what SF will
-# use if we disable S2.
+ca_shp = st_as_sfc(ca_wkt, crs = "EPSG:4326")
+#st_area(ca_shp) # 410,506,579,297 [m^2] using S2 (spherical)
+
+# The area calculations in DuckDB used the GEOS library. For consistency, we
+# will do the same with the R SF package by disabling its use of the S2 library.
 suppressMessages(sf_use_s2(FALSE)) 
-ca_area = st_area(ca_shp)
-paste("CA shape area percentile:  ", ecdf_fn_area(ca_area)) # 410680461757 [m^2] using GEOS (planar)
+ca_area = st_area(ca_shp) # 410,680,461,757 [m^2] using GEOS (planar)
+paste("CA shape area percentile:  ", ecdf_fn_area(ca_area))
 ca_bbox_area = st_area(st_as_sfc("POLYGON ((-124.409202 32.531669, -114.119061 32.531669, -114.119061 41.99954, -124.409202 41.99954, -124.409202 32.531669))", crs = "EPSG:4326"))
 paste("CA BBOX area percentile:   ", ecdf_fn_area(ca_bbox_area))
 suppressMessages(sf_use_s2(TRUE))
+
+ca_verts = count_vertices(ca_wkt)
+paste("CA shape vertex percentile:", ecdf_fn_vert_count(ca_verts))
+paste("CA shape vertex count:", ca_verts)
 ```
+
+Now that we have calculated area and vertex percentiles for the CA test geometries, we can categorize the benchmark queries in the same way as the logged queries.
 
 For reference, the binary category variable order is:\
 `spatial_bool`, `temporal_bool`, `sort_bool`, `polygon_area`, `vertex_count`
@@ -548,7 +565,7 @@ p_cats[order(-count)]
 ```
 
 ```{r top_cats_percentage}
-top_count = 6
+top_count = 7
 top_cats_percentage = p_cats[order(-count)][1:top_count, sum(count)]/p_cats[, sum(count)]
 top_cats_percentage
 ```
@@ -580,7 +597,7 @@ dtSuite8[!test_cat %in% top_cats]
 ```
 As discussed earlier, 2 of these are categories with both 99th percentile area and vertex counts, which were not observed in the logged queries at all.
 
-Below are the 4 categories from the benchmark suite that exist in the log data. Note the most common category below is also in the top `r top_count` set above.
+Below are the 4 categories from the benchmark suite that exist in the log data. Note the two most common categories below are also in the top `r top_count` set above.
 
 ```{r suite_cats}
 p_cats[test_cat %in% dtSuite8$test_cat]
@@ -591,7 +608,7 @@ p_cats[test_cat %in% dtSuite8$test_cat]
 ```{r cmr_time_density_setup}
 dtCatTimeSub = dtCatTime[test_cat %in% top_cats]
 dtCatTimeSub[, test_cat := as.factor(test_cat)]
-p_dens_cats <- ggplot(dtCatTimeSub, aes(cmr_took, color = test_cat, fill = test_cat))+
+p_dens_cats <- ggplot(dtCatTimeSub, aes(duration, color = test_cat, fill = test_cat))+
   geom_density(alpha = 0.06) +
   xlim(c(0,2500)) + # limiting this range is what generates the warning in the plot
   labs(color='Category', fill = 'Category') +
@@ -600,16 +617,37 @@ p_dens_cats <- ggplot(dtCatTimeSub, aes(cmr_took, color = test_cat, fill = test_
 p_dens_cats
 ```
 
+### CMR Duration by Category
+
+For the top `r top_count` most common categories
+
+```{r}
+dtPlot = p_cats[test_cat %in% top_cats]
+setnames(dtPlot, 'p0.5', 'p0.50')
+dtPlot = melt.data.table(dtPlot, id.vars = 'test_cat',
+                         measure.vars = c('p0.99', 'p0.95', 'p0.50'))
+setnames(dtPlot, 'variable', 'Percentile')
+ggplot(dtPlot, aes(x = test_cat, y = value, fill = Percentile)) + 
+  geom_bar(stat = "identity", position = "identity") + 
+  xlab("Category") + ylab("ms")
+```
+
+
 ## Other Summaries
 
 ### Concept Types
 
+The concept types are extracted from the request URLs, and the the large number of total concept types results from numerous requests for invalid pages that weren't cleaned from this data.
+
+In the plot below, `search/` represents the default search query with no parameters.
+
 ```{r bar_concept_type}
+plot_limit = 15
 dtPlot = dbGetQuery(con, "SELECT concept FROM week1")
 setDT(dtPlot)
 dtPlot = dtPlot[, .(count = .N), by = concept]
 unique_count = dtPlot[, .N]
-dtPlot = dtPlot[order(-count)][1:10]
+dtPlot = dtPlot[order(-count)][1:plot_limit]
 dtPlot[concept == "", concept := "NA"]
 ggplot(dtPlot, aes(x=reorder(concept,count), y=count, fill = as.factor(concept))) + 
   geom_bar(stat = "identity") + 
@@ -618,7 +656,7 @@ ggplot(dtPlot, aes(x=reorder(concept,count), y=count, fill = as.factor(concept))
   ylim(c(0,2.2e+07)) + 
   theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
         legend.position="none", axis.title=element_blank()) + 
-  ggtitle("Top 10 Concept Types", 
+  ggtitle(paste("Top", plot_limit,"Concept Types"), 
           subtitle = paste(
             "Out of", unique_count, 
             "concept types. First week of October 2024. N = 30,694,912")) +
@@ -631,7 +669,6 @@ ggplot(dtPlot, aes(x=reorder(concept,count), y=count, fill = as.factor(concept))
 dtPlot = dbGetQuery(con, "SELECT format FROM week1")
 setDT(dtPlot)
 dtPlot = dtPlot[, .(count = .N), by = format]
-unique_count = dtPlot[, .N]
 dtPlot = dtPlot[order(-count)]
 ggplot(dtPlot, aes(x=reorder(format,count), y=count, fill = as.factor(format))) + 
   geom_bar(stat = "identity") + 
@@ -665,22 +702,45 @@ ggplot(dtPlot, aes(x=reorder(method,-count), y=count, fill = as.factor(method)))
 
 ### Client ID
 
-```{r bar_clientID}
+First we'll group some records together that belong to the same product.
+```{r prep_clientID}
 dtPlot = dbGetQuery(con, "SELECT client_id FROM week1")
 setDT(dtPlot)
+dtPlot = dtPlot[!is.na(client_id)] # remove NA values
+
+dtPlot[str_detect(client_id, regex("asf_search", ignore_case = T)), 
+       client_id := "ASF Search"]
+dtPlot[str_detect(client_id, regex("eed-edsc", ignore_case = T)), 
+       client_id := "Earthdata Search"]
+dtPlot[str_detect(client_id, regex("eed-mmt", ignore_case = T)), 
+       client_id := "MMT"]
+dtPlot[str_detect(client_id, regex("AppEEARS", ignore_case = T)), 
+       client_id := "AppEEARS"]
+dtPlot[str_detect(client_id, regex("CMR2IMS", ignore_case = T)), 
+       client_id := "CMR2IMS"]
+dtPlot[str_detect(client_id, regex("cmr-stac", ignore_case = T)), 
+       client_id := "cmr-stac"]
+```
+
+```{r bar_clientID}
+plot_limit = 20
+row_count = dtPlot[, .N]
 dtPlot = dtPlot[, .(count = .N), by = client_id]
 unique_count = dtPlot[, .N]
-dtPlot = dtPlot[order(-count)][1:15]
+dtPlot = dtPlot[order(-count)][1:plot_limit]
 ggplot(dtPlot, aes(x=reorder(client_id,count), y=count, fill = as.factor(client_id))) + 
   geom_bar(stat = "identity") + 
   geom_text(aes(x=reorder(client_id,count), y=count, label = format(count, big.mark = ',')), 
-            nudge_y = 2500000, data = dtPlot[!is.na(client_id)]) + 
+            nudge_y = 300000, data = dtPlot[!is.na(client_id)]) + 
+  ylim(c(0, 3e+06)) + 
   theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
-        legend.position="none", axis.title=element_blank()) + 
-  ggtitle(paste("Top", dtPlot[, .N], "Client IDs"), 
+        legend.position="none", axis.title=element_blank(),
+        plot.title.position = "plot") + 
+  ggtitle(paste("Top", plot_limit, "Client IDs"), 
           subtitle = paste(
-            "Out of", unique_count, 
-            "client IDs. First week of October 2024. N = 30,694,912")) + 
+            "Excludes NA values. Out of", unique_count, 
+            "client IDs. First week of October 2024. N =",
+            format(row_count, big.mark = ','))) + 
   coord_flip()
 ```
 
@@ -689,11 +749,12 @@ ggplot(dtPlot, aes(x=reorder(client_id,count), y=count, fill = as.factor(client_
 Note that "Web Browser" groups any agent that included the string "Mozilla," which most web browser user agents do.
 
 ```{r bar_user_agent}
+plot_limit = 15
 dtPlot = dbGetQuery(con, "SELECT user_agent_type FROM week1")
 setDT(dtPlot)
 dtPlot = dtPlot[, .(count = .N), by = user_agent_type]
 unique_count = dtPlot[, .N]
-dtPlot = dtPlot[order(-count)][1:15]
+dtPlot = dtPlot[order(-count)][1:plot_limit]
 ggplot(dtPlot, aes(x=reorder(user_agent_type,count), y=count, fill = as.factor(user_agent_type))) + 
   geom_bar(stat = "identity") + 
   geom_text(aes(x=reorder(user_agent_type,count), y=count, label = format(count, big.mark = ',')), 
@@ -701,7 +762,7 @@ ggplot(dtPlot, aes(x=reorder(user_agent_type,count), y=count, fill = as.factor(u
   ylim(c(0,1.45e+07)) +
   theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
         legend.position="none", axis.title=element_blank()) + 
-  ggtitle(paste("Top", dtPlot[, .N], "User Agent Types"), 
+  ggtitle(paste("Top", plot_limit, "User Agent Types"), 
           subtitle = paste(
             "Out of", unique_count, 
             "user agent types. First week of October 2024. N = 30,694,912")) + 
@@ -732,7 +793,6 @@ dtPlot = dtPlot[!is.na(page_size)]
 rm_count = dtPlot[page_size > 2000, sum(count)]
 dtPlot = dtPlot[page_size <= 2000]
 unique_count = dtPlot[, .N]
-#setkey(dtPlot, "page_size")
 ggplot(dtPlot, aes(x=page_size, y=count)) + 
   geom_point() + 
   theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
@@ -745,20 +805,45 @@ ggplot(dtPlot, aes(x=page_size, y=count)) +
                           "Excludes NA and invalid requests"))
 ```
 
+### Temporal Query Type
+
+```{r bar_time_type}
+dtPlot = dbGetQuery(con, "SELECT time_type FROM week1")
+setDT(dtPlot)
+dtPlot = dtPlot[!is.na(time_type)]
+row_count = dtPlot[, .N]
+dtPlot = dtPlot[, .(count = .N), by = time_type]
+# Remove leading "params" from some time types
+dtPlot[str_detect(time_type, 'params\\.'), 
+       time_type := str_split_i(time_type, 'params\\.', 2)]
+ggplot(dtPlot, aes(x=reorder(time_type,-count), y=count, fill = as.factor(time_type))) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(x=reorder(time_type,-count), y=count, label = format(count, big.mark = ',')), 
+            nudge_y = 400000) + 
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none", axis.title=element_blank()) + 
+  ggtitle("Temporal Query Type", 
+          subtitle = paste("First week of October 2024. N =",
+            format(row_count, big.mark = ',')))
+```
+
 ### Geometry Type
 
 ```{r bar_geo_type}
 dtPlot = dbGetQuery(con, "SELECT geo_type FROM week1")
 setDT(dtPlot)
+dtPlot = dtPlot[!is.na(geo_type)]
+row_count = dtPlot[, .N]
 dtPlot = dtPlot[, .(count = .N), by = geo_type]
 ggplot(dtPlot, aes(x=reorder(geo_type,-count), y=count, fill = as.factor(geo_type))) + 
   geom_bar(stat = "identity") + 
   geom_text(aes(x=reorder(geo_type,-count), y=count, label = format(count, big.mark = ',')), 
-            nudge_y = 1000000) + 
+            nudge_y = 250000) + 
   theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
         legend.position="none", axis.title=element_blank()) + 
   ggtitle("Geometry Type", 
-          subtitle = "First week of October 2024. N = 30,694,912")
+          subtitle = paste("First week of October 2024. N =",
+            format(row_count, big.mark = ',')))
 ```
 
 ### Polygon Area
