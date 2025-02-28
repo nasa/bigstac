@@ -96,6 +96,14 @@ granule_queries = dbGetQuery(
 cat(paste("Granule queries:", format(granule_queries, big.mark=",")))
 ```
 
+Check time range of the processed logs
+
+```{r time_range, results='hold'}
+cat(paste("First query:", dbGetQuery(con, 'SELECT min(now) FROM week1'), '\n'))
+cat(paste("Last query: ", dbGetQuery(con, 'SELECT max(now) FROM week1')))
+```
+
+
 ### Example rows
 
 ```{r example_rows}
