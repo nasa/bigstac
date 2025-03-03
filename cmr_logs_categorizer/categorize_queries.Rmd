@@ -1,0 +1,962 @@
+---
+title: "Categorize CMR Queries"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: 
+       collapsed: false
+    fig_width: 9
+    fig_height: 6
+    df_print: paged
+---
+
+**Questions?**  
+Contact [Johnathan Rush](mailto:johnathan.f.rush@nasa.gov), NASA EED-3
+
+```{css, echo=FALSE}
+/* Make the commentary text a little larger than code cells and cell output */
+p {
+  font-size: 16px;
+}
+```
+
+```{r sources}
+suppressPackageStartupMessages({
+  library(data.table)
+  library(stringr)
+  library(sf)
+  library(arrow)
+  library(duckdb)
+  library(ggplot2)
+  library(scales)
+})
+source('analysis_functions.R')
+```
+
+## About RMarkdown
+
+RMarkdown is like a Jupyter notebook, in that there are code cells, whose output can be printed right below them, and these can be intermixed blocks of markdown-formatted text.
+
+Within the RStudio IDE, you can see the output of code cells when you run them, but cell output is not saved to the `.Rmd` file. Jupyter notebooks, however, include common kinds of cell output (e.g. images, tables) within the saved `.ipynb` file.
+
+This means that while code and documentation is written and debugged within a `.Rmd` file, when you're ready to share analysis results with others, you typically render the document to a common publication format like HTML or PDF. The intended format is set in the YAML block at the top of the file. Rendering the document is also called "knitting" it, since it uses the `knitr` package.
+
+This notebook gathers and prepares data, and includes some database operations (like creating a new column) that should only be run once. Because the knitting process runs all the code blocks (which helps ensure that the results are reproducible!), it might fail on an error when encountering operations that shouldn't be run again. In the interest of both showing the complete workflow and avoiding more verbose logic that checks the database status before every operation, I'm creating this simple boolean below that indicates whether to modify the database.
+
+If this is the first time you've tun this code, or you've changed the database path above this block to point to a new file, you can set it to `TRUE`.
+
+```{r connect}
+log_parent_directory = "../dev/log_parsing"
+con <- dbConnect(duckdb(), 
+                 dbdir = paste0(log_parent_directory, "/logs_week1.db"))
+```
+```{r modifyDB}
+modifyDB = FALSE
+```
+
+## Load parquet into DuckDB DB
+
+Prepare column names
+
+```{r column_names, results='hide'}
+log_export_directory = paste0(log_parent_directory, "/logs")
+dtExample = dbGetQuery(
+  con, paste0("SELECT * FROM read_parquet('", 
+              log_export_directory, 
+              "/**/*.parquet', union_by_name=true) LIMIT 1"))
+column_names = names(dtExample)
+# Remove periods from column names
+column_names[column_names == "client.id"] <- '"client.id" AS client_id'
+column_names[column_names == "request.id"] <- '"request.id" AS request_id'
+# Remove id column from earlier processing
+columns_except_id = paste(setdiff(column_names, "id"), collapse = ", ")
+```
+
+Load parquet data into database file
+
+```{r create_db, results='hide'}
+if(modifyDB) { dbExecute(con, paste0(
+  'CREATE OR REPLACE TABLE week1 AS FROM (SELECT ', 
+  columns_except_id,
+  ' FROM read_parquet("', log_export_directory, '/**/*.parquet", union_by_name=true) ',
+  'ORDER BY now)')) }
+```
+
+Check row count of created table
+
+```{r check_query_count}
+total_queries = dbGetQuery(con, "SELECT COUNT(*) FROM week1")[1,1]
+cat(paste("Total queries:", format(total_queries, big.mark=",")))
+```
+
+```{r check_granule_query_count}
+granule_queries = dbGetQuery(
+  con, "SELECT COUNT(*) FROM week1 WHERE concept == 'granules'")[1,1]
+cat(paste("Granule queries:", format(granule_queries, big.mark=",")))
+```
+
+Check time range of the processed logs
+
+```{r time_range, results='hold'}
+cat(paste("First query:", dbGetQuery(con, 'SELECT min(now) FROM week1'), '\n'))
+cat(paste("Last query: ", dbGetQuery(con, 'SELECT max(now) FROM week1')))
+```
+
+
+### Example rows
+
+```{r example_rows}
+dbGetQuery(con, "SELECT * FROM week1 LIMIT 10")
+```
+
+Recalculate row ID column
+
+```{r rowID, results='hide'}
+if(modifyDB) { dbExecute(con, paste(
+  "CREATE SEQUENCE id_seq START 1;",
+  "ALTER TABLE week1 ADD COLUMN id INTEGER DEFAULT nextval('id_seq');"
+))}
+```
+
+## Categorize CMR Queries
+
+There are several attributes of CMR queries that we expect may be relevant to CMR query performance. These include whether the user included a spatial query, how complex the shape is, the presence of a temporal query, and the presence of specified sort order(s).
+
+First, calculate these indicator variables for all the queries in the sample. Then consider their joint presence/absence to group them into broad categories.
+
+### Spatial boolean
+
+```{r spatial_bool, results='hide'}
+if(modifyDB) { 
+  dbExecute(con, paste( 
+            "ALTER TABLE week1",
+            "ADD COLUMN spatial_bool BOOLEAN DEFAULT FALSE"))
+  dbExecute(con, paste( 
+            "UPDATE week1",
+            "SET spatial_bool = TRUE",
+            "WHERE geo_type IS NOT NULL"))
+}
+```
+
+#### Uploaded Shapefiles
+
+We've only parsed spatial queries that were passed as coordinates through CMR, but users can also upload shapefiles. While running in production, CMR does not log the details of these geometries. That means we can't determine their location, area, or vertex complexity after the fact.
+
+It's certainly possible that uploaded shapefiles differ in complexity from the geometries provided as coordinates to the CMR API. However, these represent a relatively small proportion of all spatial queries.
+
+Running the `count_shapefiles.sh` script finds log entries that indicate a shapefile was uploaded, and then `sum_shapes.sh` will total these up. The following compares the count of spatial queries using uploaded shapefiles vs. those providing coordinates directly to the CMR API:
+
+```{r sum_shapes, results='hold'}
+uploaded_shape_count = system2(
+  "./sum_shapes.sh", log_export_directory, stdout = TRUE)
+parsed_wkt_count = dbGetQuery(
+  con, "SELECT COUNT(*) FROM week1 WHERE spatial_bool = TRUE")
+cat(paste(
+  format(uploaded_shape_count, big.mark=','), 
+  "shapes were uploaded to CMR for which we do not have coordinates.\n"))
+cat(paste(
+  format(parsed_wkt_count, big.mark=','), 
+  "spatial queries with coordinates were successfully parsed."))
+```
+
+Because we don't have the coordinates for these `r uploaded_shape_count` queries, they are not counted in the spatial boolean or spatial complexity variables.
+
+### Spatial complexity
+
+#### Vertex Count
+
+```{r vertex_count}
+dtWKT = dbGetQuery(con, "SELECT wkt, id, geo_type FROM week1")
+setDT(dtWKT)
+dtWKT[, vertex_count := as.integer(count_vertices(wkt))]
+# Only use POLYGON types in the distribution, otherwise BBOX queries will heavily skew it
+ecdf_fn_vert_count <- ecdf(dtWKT[!is.na(vertex_count) & geo_type == "POLYGON", vertex_count])
+dtWKT[!is.na(vertex_count), 
+      vertex_pctile := round(ecdf_fn_vert_count(vertex_count), 6), 
+      by = vertex_count]
+dtWKT[!is.na(vertex_count), .N, by = .(vertex_count, vertex_pctile)][order(vertex_count)]
+```
+
+#### Area
+
+```{r duckdb_spatial, results='hide'}
+dbExecute(con, "INSTALL spatial; LOAD spatial")
+```
+
+```{r polygon_area, results='hide'}
+if(modifyDB) { dbExecute(con, paste( 
+          "ALTER TABLE week1",
+          "ADD COLUMN polygon_area BIGINT"))}
+```
+
+```{r duckdb_area, results='hide'}
+if(modifyDB) { dbExecute(con, paste( 
+          "UPDATE week1",
+          "SET polygon_area = ST_AREA(ST_GeomFromText(wkt))",
+          "WHERE wkt IS NOT NULL AND geo_type IN ('BBOX', 'POLYGON')"))}
+```
+
+```{r dtAreas}
+dtAreas = dbGetQuery(con, "SELECT id, polygon_area FROM week1 WHERE polygon_area IS NOT NULL")
+setDT(dtAreas)
+```
+
+```{r ecdf_area}
+ecdf_fn_area <- ecdf(dtAreas$polygon_area)
+dtAreas[!is.na(polygon_area), 
+        area_pctile := ecdf_fn_area(polygon_area), 
+        by = .(polygon_area)]
+dtAreas[!is.na(polygon_area), .N, by = .(polygon_area, area_pctile)][order(polygon_area)]
+```
+
+#### Join Vertex Count and Area back to DuckDB table
+
+```{r add_area_vertex_columns, results='hide'}
+if(modifyDB) { dbExecute(con, paste( 
+          "ALTER TABLE week1",
+          "ADD COLUMN vertex_count USMALLINT;",
+          "ALTER TABLE week1",
+          "ADD COLUMN vertex_pctile FLOAT;",
+          "ALTER TABLE week1",
+          "ADD COLUMN area_pctile FLOAT;"))}
+```
+
+```{r register_areas_vertices, results='hide'}
+duckdb_register(con, "dtAreas", dtAreas)
+duckdb_register(con, "dtWKT", dtWKT)
+```
+
+```{r test_join, include=FALSE, eval=FALSE}
+# Testing if the join from an R data frame to DuckDB works
+dbGetQuery(con, paste(
+  "SELECT week1.id, week1.polygon_area, dtAreas.area_pctile",
+  "FROM week1",
+  "JOIN dtAreas",
+  "ON week1.id = dtAreas.id"
+))
+```
+
+```{r copy_area_pctile, results='hide'}
+if(modifyDB) { dbExecute(con, paste(
+  "UPDATE week1",
+  "SET area_pctile = dtAreas.area_pctile",
+  "FROM dtAreas",
+  "WHERE week1.id = dtAreas.id"
+))}
+```
+
+```{r test_copied_area_pctile, include=FALSE, eval=FALSE}
+# Test that polygon area data was copied from R to DuckDB
+dbGetQuery(con, paste(
+  "SELECT id, polygon_area, area_pctile",
+  "FROM week1",
+  "WHERE polygon_area IS NOT NULL"
+))
+dbGetQuery(con, paste(
+  "SELECT id, polygon_area, area_pctile",
+  "FROM week1",
+  "WHERE area_pctile >= 0.99"
+))
+```
+
+```{r copy_vertices, results='hide'}
+if(modifyDB) { dbExecute(con, paste(
+  "UPDATE week1",
+  "SET vertex_count = dtWKT.vertex_count,",
+      "vertex_pctile = dtWKT.vertex_pctile",
+  "FROM dtWKT",
+  "WHERE week1.id = dtWKT.id"
+))}
+```
+
+```{r test_copied_vertices, include=FALSE, eval=FALSE}
+# Test that vertex counts were copied from R to DuckDB
+dbGetQuery(con, paste(
+  "SELECT id, vertex_count, vertex_pctile",
+  "FROM week1",
+  "WHERE vertex_count IS NOT NULL"
+))
+```
+
+```{r rm_dtWKT}
+# Keep a copy of the vertices for later
+dtVert = dtWKT[!is.na(vertex_count), .(vertex_count, geo_type)]
+# Recover some memory in R
+rm(dtWKT)
+```
+
+### Temporal Boolean
+
+```{r temporal_bool, results='hide'}
+if(modifyDB) { 
+  dbExecute(con, paste( 
+            "ALTER TABLE week1",
+            "ADD COLUMN temporal_bool BOOLEAN DEFAULT FALSE"))
+  dbExecute(con, paste( 
+            "UPDATE week1",
+            "SET temporal_bool = TRUE",
+            "WHERE time_query IS NOT NULL"))
+}
+```
+
+### Ordering Boolean
+
+```{r sort_bool, results='hide'}
+if(modifyDB) { 
+  dbExecute(con, paste( 
+            "ALTER TABLE week1",
+            "ADD COLUMN sort_bool BOOLEAN DEFAULT FALSE"))
+  dbExecute(con, paste( 
+            "UPDATE week1",
+            "SET sort_bool = TRUE",
+            "WHERE sort_key IS NOT NULL"))
+}
+```
+
+#### Multiple ordering
+
+```{r calculate_sort_count}
+dtOrders = dbGetQuery(con, "SELECT id, sort_key FROM week1 WHERE sort_key IS NOT NULL")
+setDT(dtOrders)
+dtOrders[, sort_count := count_vertices(sort_key)]
+dtOrders[, .N, by = sort_count][order(-N)]
+```
+
+```{r copy_sort_count, results='hide'}
+duckdb_register(con, "dtOrders", dtOrders)
+if(modifyDB) { 
+  dbExecute(con, paste( 
+            "ALTER TABLE week1",
+            "ADD COLUMN sort_count TINYINT"))
+  dbExecute(con, paste( 
+            "UPDATE week1",
+            "SET sort_count = dtOrders.sort_count",
+            "FROM dtOrders",
+            "WHERE week1.id = dtOrders.id"))
+}
+```
+
+```{r test_sort_count, include=FALSE, eval=FALSE}
+# Test that the sort count was copied from R to DuckDB
+dbGetQuery(con, paste(
+  "SELECT id, sort_count",
+  "FROM week1",
+  "WHERE sort_count IS NOT NULL"
+))
+```
+
+### Provider vs. Collection
+
+```{r create_prov_coll, results='hide'}
+if(modifyDB) { dbExecute(con, paste( 
+          "ALTER TABLE week1",
+          "ADD COLUMN prov_coll CHARACTER DEFAULT ''"))}
+```
+
+```{r update_prov_coll, results='hide'}
+if(modifyDB) { 
+  dbExecute(con, paste( 
+            "UPDATE week1",
+            "SET prov_coll = 'Provider'",
+            "WHERE provider IS NOT NULL AND concept_id IS NULL"))
+  dbExecute(con, paste( 
+            "UPDATE week1",
+            "SET prov_coll = 'Collection'",
+            "WHERE provider IS NULL AND concept_id IS NOT NULL"))
+  dbExecute(con, paste( 
+            "UPDATE week1",
+            "SET prov_coll = 'Both'",
+            "WHERE provider IS NOT NULL AND concept_id IS NOT NULL"))
+}
+```
+
+## Category Creation
+
+Set NA values for Area and Vertex percentiles to 0
+
+```{r null_zero_percentiles, results='hide'}
+if(modifyDB) { 
+  dbExecute(con, paste(
+    "UPDATE week1",
+    "SET area_pctile = 0",
+    "WHERE area_pctile IS NULL"
+  ))
+  dbExecute(con, paste(
+    "UPDATE week1",
+    "SET vertex_pctile = 0",
+    "WHERE vertex_pctile IS NULL"
+  ))
+}
+```
+
+```{r create_cat1, results='hide'}
+if(modifyDB) { 
+  dbExecute(con, paste(
+    "CREATE OR REPLACE VIEW cat1 AS FROM",
+    "(SELECT",
+    "id,",
+    # Create 5-bit binary category variable from 5 booleans
+    "spatial_bool::UTINYINT || temporal_bool::UTINYINT ||",
+      "sort_bool::UTINYINT || (area_pctile>0.99)::UTINYINT ||",
+      "(vertex_pctile>0.99)::UTINYINT",
+      "AS test_cat,",
+    "spatial_bool, temporal_bool, sort_bool, sort_count,",
+    "polygon_area, vertex_count, duration, prov_coll",
+    "FROM week1",
+    "WHERE concept == 'granules')"
+  ))
+}
+```
+
+### Category Summaries
+
+Example query rows with categorization
+
+```{r example_queries_with_categories}
+(dbGetQuery(con, "SELECT test_cat, duration, spatial_bool, temporal_bool, sort_bool, sort_count, polygon_area, vertex_count FROM cat1 ORDER BY duration DESC LIMIT 100"))
+```
+
+```{r dtCatTime}
+dtCatTime = dbGetQuery(con, "SELECT test_cat, duration FROM cat1")
+setDT(dtCatTime)
+dtCatTime = dtCatTime[!is.na(duration)]
+setkey(dtCatTime, "test_cat")
+```
+
+### CMR processing time percentiles
+
+```{r cmr_percentile, rows.print=16}
+unique_cats = dtCatTime[, unique(test_cat)]
+cmr_percentile <- function(unique_cats, percentile){
+  cat_perc = sapply(unique_cats, function(x){
+    quantile(dtCatTime[test_cat == x, duration], probs = percentile)
+  })
+  names(cat_perc) <- unique_cats
+  dt = stack(cat_perc)
+  setDT(dt)
+  setnames(dt, old = c('values', 'ind'), new = c(paste0("p", percentile), "test_cat"))
+  setkey(dt, "test_cat")
+}
+p50_cats = cmr_percentile(unique_cats, 0.5)
+p95_cats = cmr_percentile(unique_cats, 0.95)
+p99_cats = cmr_percentile(unique_cats, 0.99)
+
+# Calculate count of queries per category
+counts_cats = dtCatTime[, .(count = .N), by = test_cat]
+
+p_cats = p50_cats[p95_cats][p99_cats][counts_cats]
+```
+
+Add columns explaining the binary coded category values
+
+```{r percentile_by_category}
+p_cats = p_cats[, .(test_cat, count, p0.5, p0.95, p0.99,
+  Spatial = as.logical(as.integer(str_sub(test_cat,1,1))),
+  Temporal = as.logical(as.integer(str_sub(test_cat,2,2))),
+  Sort = as.logical(as.integer(str_sub(test_cat,3,3))),
+  Area99 = as.logical(as.integer(str_sub(test_cat,4,4))),
+  Vertex99 = as.logical(as.integer(str_sub(test_cat,5,5)))
+)]
+```
+
+Display sorted by the most common query categories, descending
+
+```{r categories_by_count}
+p_cats[order(-count)]
+```
+
+Display sorted by the slowest categories (by 95th percentile), descending
+
+```{r categories_by_slowest}
+p_cats[order(-p0.95)]
+```
+
+### Current test suite coverage
+
+In the Bigstac work thus far, we've used a suite of queries ([suite8.json](https://github.com/nasa/bigstac/blob/main/tester/suite8.json)) as a benchmarking tool to test various options in parquet format, file organization, compute resources, and DuckDB. If we assign those queries the same categories as we assigned to the logged CMR queries above, and then we can estimate how good our benchmark suite's coverage was of actual CMR usage.
+
+Our benchmark suite used two spatial features: a polygon of California (a simplified version of the shape from [Natural Earth](https://www.naturalearthdata.com/)), and a polygon representing the bounding box of California. To categorize the benchmark queries using these polygons, we'll need to calculate how its vertex count and polygon area rank among the logged queries in terms of percentile.
+
+Check percentile of the vertex count and area of CA shape used in benchmark suite:
+
+```{r ca_percentiles, results='hold'}
+ca_raw = system2(
+  command = "jq", 
+  args = paste(
+    "'.tests[] |",
+    "select(.name==\"MBR-LIR-California_simplified-time_Since2020-SortBy_GranuleUR\")",
+    "| .raw' ../tester/suite8.json"), 
+  stdout = TRUE)
+ca_wkt = str_sub(ca_raw, 
+                 str_locate(ca_raw, "MULTIPOLYGON")[1], 
+                 str_locate(ca_raw, "'::GEOMETRY")[1]-1)
+
+ca_shp = st_as_sfc(ca_wkt, crs = "EPSG:4326")
+#st_area(ca_shp) # 410,506,579,297 [m^2] using S2 (spherical)
+
+# The area calculations in DuckDB used the GEOS library. For consistency, we
+# will do the same with the R SF package by disabling its use of the S2 library.
+suppressMessages(sf_use_s2(FALSE)) 
+ca_area = st_area(ca_shp) # 410,680,461,757 [m^2] using GEOS (planar)
+paste("CA shape area percentile:  ", ecdf_fn_area(ca_area))
+ca_bbox_area = st_area(st_as_sfc("POLYGON ((-124.409202 32.531669, -114.119061 32.531669, -114.119061 41.99954, -124.409202 41.99954, -124.409202 32.531669))", crs = "EPSG:4326"))
+paste("CA BBOX area percentile:   ", ecdf_fn_area(ca_bbox_area))
+suppressMessages(sf_use_s2(TRUE))
+
+ca_verts = count_vertices(ca_wkt)
+paste("CA shape vertex percentile:", ecdf_fn_vert_count(ca_verts))
+paste("CA shape vertex count:", ca_verts)
+```
+
+Now that we have calculated area and vertex percentiles for the CA test geometries, we can categorize the benchmark queries in the same way as the logged queries.
+
+For reference, the binary category variable order is:\
+`spatial_bool`, `temporal_bool`, `sort_bool`, `polygon_area`, `vertex_count`
+
+```{r categorized_benchmark_suite}
+bigstac_suite8 = c(
+  BBOX_time_sort_largeArea = "11110",
+  shape_time_sort_largeArea_largeVertex = "11111",
+  time_sort = "01100",
+  BBOX_time_largeArea = "11010",
+  shape_time_largeArea_largeVertex = "11011",
+  time = "01000"
+)
+dtSuite8 = stack(bigstac_suite8)
+setDT(dtSuite8)
+setnames(dtSuite8, new = c("test_cat", "test_type"))
+dtSuite8
+```
+
+The California shape we used in benchmarks was 99th percentile complex in terms of both vertex count and area (categories codes ending in `11`). That combination was not seen in any of the 18 million granule queries in the week of data we've analyzed here, which is why those two categories have NA values in the join result below.
+
+```{r benchmark_categories_log_summary}
+setkey(p_cats, "test_cat")
+setkey(dtSuite8, "test_cat")
+p_cats[dtSuite8, ]
+```
+
+```{r coverage1}
+paste("The latest benchmark suite would cover",
+      label_percent(accuracy = 0.1)(
+        dtCatTime[dtSuite8, .N]/dtCatTime[, .N]),
+      "of queries")
+```
+
+The following categories in the logged CMR queries were not covered by the latest benchmark suite:
+
+```{r non_covered_classes_median}
+p_cats[!dtSuite8][order(p0.5)]
+```
+
+A large portion of these queries are easier than others: the ones in the `00000` category have none of the query parameters we've selected as being interesting for performance.
+
+What proportion of the queries does the benchmark suite cover if we exclude this category with the fastest median processing time and the largest number of queries?
+
+```{r coverage2}
+paste("The latest benchmark suite would cover",
+      label_percent(accuracy = 0.1)(dtCatTime[dtSuite8, .N]/
+                                dtCatTime[!test_cat %in% c("00000"), .N]),
+      "of non-trivial queries")
+```
+
+However, we wouldn't want to exclude this category from consideration during the design of Bigstac, given that it represents a plurality of queries.  
+There is also significant variation within this category, as seen by the greater than 1 second difference between the 50th and 95th percentile performance. Possible routes for explanation of that variance would be looking at variables not included in the categories, like requested page size, or calculating a measurement of CMR load using a window function to count the number of queries received in the surrounding X minutes. Other possible explanations would not be in the `cmr-logs` log group, like load introduced by data ingestion.
+
+## Selecting Categories of Interest
+
+We have `r p_cats[, .N]` categories in this one week sample of CMR queries. Below is a table of the most common categories.
+
+```{r most_common_categories}
+p_cats[order(-count)]
+```
+
+```{r top_cats_percentage}
+top_count = 7
+top_cats_percentage = p_cats[order(-count)][1:top_count, sum(count)]/p_cats[, sum(count)]
+top_cats_percentage
+```
+
+We need to keep in mind some existing realistic query patterns when designing Bigstac. If we were to focus on the top `r top_count` most common categories, they would represent `r label_percent(accuracy = 0.1)(top_cats_percentage)` of the queries. After the top `r top_count` categories, there is a larger drop in query counts.
+
+```{r top_size_cats}
+top_cats = p_cats[order(-count)][1:top_count, test_cat]
+top_cats
+```
+
+Top `r top_count` categories
+
+```{r top_cats}
+p_cats[test_cat %in% top_cats]
+```
+### Relative to benchmark suite
+
+Which of the top `r top_count` categories are in the current benchmark suite?
+
+```{r top_in_suite}
+dtSuite8[test_cat %in% top_cats]
+```
+
+Which categories in the benchmark suite are not in the top `r top_count` most common categories?
+
+```{r suite_not_in_top}
+dtSuite8[!test_cat %in% top_cats]
+```
+As discussed earlier, 2 of these are categories with both 99th percentile area and vertex counts, which were not observed in the logged queries at all.
+
+Below are the 4 categories from the benchmark suite that exist in the log data. Note the two most common categories below are also in the top `r top_count` set above.
+
+```{r suite_cats}
+p_cats[test_cat %in% dtSuite8$test_cat]
+```
+
+### Density of CMR time
+
+```{r cmr_time_density_setup}
+dtCatTimeSub = dtCatTime[test_cat %in% top_cats]
+dtCatTimeSub[, test_cat := as.factor(test_cat)]
+p_dens_cats <- ggplot(dtCatTimeSub, aes(duration, color = test_cat, fill = test_cat))+
+  geom_density(alpha = 0.06) +
+  xlim(c(0,2500)) + # limiting this range is what generates the warning in the plot
+  labs(color='Category', fill = 'Category') +
+  guides(color = guide_legend(position = "inside")) + 
+  theme(legend.position.inside = c(0.93, 0.75))
+p_dens_cats
+```
+
+### CMR Duration by Category
+
+For the top `r top_count` most common categories
+
+```{r}
+dtPlot = p_cats[test_cat %in% top_cats]
+setnames(dtPlot, 'p0.5', 'p0.50')
+dtPlot = melt.data.table(dtPlot, id.vars = 'test_cat',
+                         measure.vars = c('p0.99', 'p0.95', 'p0.50'))
+setnames(dtPlot, 'variable', 'Percentile')
+ggplot(dtPlot, aes(x = test_cat, y = value, fill = Percentile)) + 
+  geom_bar(stat = "identity", position = "identity") + 
+  xlab("Category") + ylab("ms")
+```
+
+
+## Other Summaries
+
+### Concept Types
+
+The concept types are extracted from the request URLs, and the the large number of total concept types results from numerous requests for invalid pages that weren't cleaned from this data.
+
+In the plot below, `search/` represents the default search query with no parameters.
+
+```{r bar_concept_type}
+plot_limit = 15
+dtPlot = dbGetQuery(con, "SELECT concept FROM week1")
+setDT(dtPlot)
+dtPlot = dtPlot[, .(count = .N), by = concept]
+unique_count = dtPlot[, .N]
+dtPlot = dtPlot[order(-count)][1:plot_limit]
+dtPlot[concept == "", concept := "NA"]
+ggplot(dtPlot, aes(x=reorder(concept,count), y=count, fill = as.factor(concept))) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(x=reorder(concept,count), y=count, label = format(count, big.mark = ',')), 
+            nudge_y = 1900000) + 
+  ylim(c(0,2.2e+07)) + 
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none", axis.title=element_blank()) + 
+  ggtitle(paste("Top", plot_limit,"Concept Types"), 
+          subtitle = paste(
+            "Out of", unique_count, 
+            "concept types. First week of October 2024. N = 30,694,912")) +
+  coord_flip()
+```
+
+### Format
+
+```{r bar_format_type}
+dtPlot = dbGetQuery(con, "SELECT format FROM week1")
+setDT(dtPlot)
+dtPlot = dtPlot[, .(count = .N), by = format]
+dtPlot = dtPlot[order(-count)]
+ggplot(dtPlot, aes(x=reorder(format,count), y=count, fill = as.factor(format))) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(x=reorder(format,count), y=count, label = format(
+    count, big.mark = ',')), nudge_y = 870000) + 
+  scale_y_continuous(expand = c(0.02, 0), limits = c(0,1.05e+07),
+                     labels = \(l) format(l, scientific = FALSE, big.mark=',')) +
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none", axis.title=element_blank()) + 
+  ggtitle("Format Types", 
+          subtitle = "First week of October 2024. N = 30,694,912") +
+  coord_flip()
+```
+
+### Method
+
+```{r bar_method}
+dtPlot = dbGetQuery(con, "SELECT method FROM week1")
+setDT(dtPlot)
+dtPlot = dtPlot[, .(count = .N), by = method]
+ggplot(dtPlot, aes(x=reorder(method,-count), y=count, fill = as.factor(method))) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(x=reorder(method,-count), y=count, label = format(count, big.mark = ',')), 
+            nudge_y = 1000000) + 
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none") + 
+  xlab("HTTP method") +
+  ggtitle("HTTP Method", 
+          subtitle = "First week of October 2024. N = 30,694,912")
+```
+
+### Client ID
+
+First we'll group some records together that belong to the same product.
+```{r prep_clientID}
+dtPlot = dbGetQuery(con, "SELECT client_id FROM week1")
+setDT(dtPlot)
+dtPlot = dtPlot[!is.na(client_id)] # remove NA values
+
+dtPlot[str_detect(client_id, regex("asf_search", ignore_case = T)), 
+       client_id := "ASF Search"]
+dtPlot[str_detect(client_id, regex("eed-edsc", ignore_case = T)), 
+       client_id := "Earthdata Search"]
+dtPlot[str_detect(client_id, regex("eed-mmt", ignore_case = T)), 
+       client_id := "MMT"]
+dtPlot[str_detect(client_id, regex("AppEEARS", ignore_case = T)), 
+       client_id := "AppEEARS"]
+dtPlot[str_detect(client_id, regex("CMR2IMS", ignore_case = T)), 
+       client_id := "CMR2IMS"]
+dtPlot[str_detect(client_id, regex("cmr-stac", ignore_case = T)), 
+       client_id := "cmr-stac"]
+```
+
+```{r bar_clientID}
+plot_limit = 20
+row_count = dtPlot[, .N]
+dtPlot = dtPlot[, .(count = .N), by = client_id]
+unique_count = dtPlot[, .N]
+dtPlot = dtPlot[order(-count)][1:plot_limit]
+ggplot(dtPlot, aes(x=reorder(client_id,count), y=count, fill = as.factor(client_id))) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(x=reorder(client_id,count), y=count, label = format(count, big.mark = ',')), 
+            nudge_y = 300000, data = dtPlot[!is.na(client_id)]) + 
+  ylim(c(0, 3e+06)) + 
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none", axis.title=element_blank(),
+        plot.title.position = "plot") + 
+  ggtitle(paste("Top", plot_limit, "Client IDs"), 
+          subtitle = paste(
+            "Excludes NA values. Out of", unique_count, 
+            "client IDs. First week of October 2024. N =",
+            format(row_count, big.mark = ','))) + 
+  coord_flip()
+```
+
+### User Agent Type
+
+Note that "Web Browser" groups any agent that included the string "Mozilla," which most web browser user agents do.
+
+```{r bar_user_agent}
+plot_limit = 15
+dtPlot = dbGetQuery(con, "SELECT user_agent_type FROM week1")
+setDT(dtPlot)
+dtPlot = dtPlot[, .(count = .N), by = user_agent_type]
+unique_count = dtPlot[, .N]
+dtPlot = dtPlot[order(-count)][1:plot_limit]
+ggplot(dtPlot, aes(x=reorder(user_agent_type,count), y=count, fill = as.factor(user_agent_type))) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(x=reorder(user_agent_type,count), y=count, label = format(count, big.mark = ',')), 
+            nudge_y = 1500000, data = dtPlot[!is.na(user_agent_type)]) + 
+  ylim(c(0,1.45e+07)) +
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none", axis.title=element_blank()) + 
+  ggtitle(paste("Top", plot_limit, "User Agent Types"), 
+          subtitle = paste(
+            "Out of", unique_count, 
+            "user agent types. First week of October 2024. N = 30,694,912")) + 
+  coord_flip()
+```
+
+### Page Size
+
+All request counts in the plot below are \>= 1.
+
+```{r points_page_size}
+# Formats numbers less than 10000 in non-scientific notation
+conditional_scientific = function(x){
+  sapply(x, function(l){
+    if(l < 10000){
+      format(l, scientific = FALSE)
+    } else {
+      format(l, scientific = TRUE)
+    }
+  })
+}
+
+dtPlot = dbGetQuery(con, "SELECT page_size FROM week1")
+setDT(dtPlot)
+dtPlot = dtPlot[, .(count = .N), by = page_size]
+na_count = dtPlot[is.na(page_size), count]
+dtPlot = dtPlot[!is.na(page_size)]
+rm_count = dtPlot[page_size > 2000, sum(count)]
+dtPlot = dtPlot[page_size <= 2000]
+unique_count = dtPlot[, .N]
+ggplot(dtPlot, aes(x=page_size, y=count)) + 
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none", axis.title=element_blank()) + 
+  xlab("Page Size") + ylab("Count") + 
+  scale_y_continuous(breaks = c(1, 1e+06, 2e+06), labels = conditional_scientific) + 
+  ggtitle("Request Count by Page Size",
+         subtitle = paste0("First week of October 2024. N = ", 
+                          format(dtPlot[, sum(count)], big.mark = ","), ". ",
+                          "Excludes NA and invalid requests"))
+```
+
+### Temporal Query Type
+
+```{r bar_time_type}
+dtPlot = dbGetQuery(con, "SELECT time_type FROM week1")
+setDT(dtPlot)
+dtPlot = dtPlot[!is.na(time_type)]
+row_count = dtPlot[, .N]
+dtPlot = dtPlot[, .(count = .N), by = time_type]
+# Remove leading "params" from some time types
+dtPlot[str_detect(time_type, 'params\\.'), 
+       time_type := str_split_i(time_type, 'params\\.', 2)]
+ggplot(dtPlot, aes(x=reorder(time_type,-count), y=count, fill = as.factor(time_type))) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(x=reorder(time_type,-count), y=count, label = format(count, big.mark = ',')), 
+            nudge_y = 400000) + 
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none", axis.title=element_blank()) + 
+  ggtitle("Temporal Query Type", 
+          subtitle = paste("First week of October 2024. N =",
+            format(row_count, big.mark = ',')))
+```
+
+### Geometry Type
+
+```{r bar_geo_type}
+dtPlot = dbGetQuery(con, "SELECT geo_type FROM week1")
+setDT(dtPlot)
+dtPlot = dtPlot[!is.na(geo_type)]
+row_count = dtPlot[, .N]
+dtPlot = dtPlot[, .(count = .N), by = geo_type]
+ggplot(dtPlot, aes(x=reorder(geo_type,-count), y=count, fill = as.factor(geo_type))) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(x=reorder(geo_type,-count), y=count, label = format(count, big.mark = ',')), 
+            nudge_y = 250000) + 
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none", axis.title=element_blank()) + 
+  ggtitle("Geometry Type", 
+          subtitle = paste("First week of October 2024. N =",
+            format(row_count, big.mark = ',')))
+```
+
+### Polygon Area
+
+```{r susbet_dtAreas}
+dtAreas = dtAreas[!is.na(polygon_area) & polygon_area > 0, ]
+area_count = dtAreas[, .N]
+```
+
+Getting breaks for such a wide distribution was tricky. I started with Fisher-Jenks classification from the [`classInt` package](https://r-spatial.github.io/classInt/reference/classIntervals.html).
+
+```{r fisher_breaks_example}
+area_fisher_example = classInt::classIntervals(dtAreas$polygon_area, n = 5, style = "fisher")
+area_fisher_example
+```
+
+But it uses random sampling for large datasets, which makes the breaks not reproducible. Another challenge is the typical histogram plotting methods show the width of the bins with a constant scale on the plot axis, which can make simultaneously displaying some bins with a width in the hundreds and others with a width in the tens of millions impractical.
+
+Instead, I took the Fisher-Jenks bins as an inspiration for manual binning, increased resolution for small areas (where most of the values are), and then assigned them to discrete values to use in a bar plot.
+
+```{r area_binning}
+area_bins = c(1, 10, 100, 1000, 5000, 5e+07, 1e+08, 1e+09, max(dtAreas$polygon_area))
+area_hist = hist(dtAreas$polygon_area, breaks = area_bins, plot = FALSE)
+dtPlot = as.data.table(list(lower = area_hist$breaks[-length(area_hist$breaks)], 
+                            upper = area_hist$breaks[-1],
+                            counts = area_hist$counts))
+# Show that bins are right-inclusive in their names
+dtPlot[, bin := paste(conditional_scientific(lower+1), "-", 
+                      conditional_scientific(upper))]
+# Fix the first bin name
+dtPlot[1, bin := paste(conditional_scientific(lower), "-", 
+                      conditional_scientific(upper))]
+# Reduce significant digits in maximum label
+dtPlot[upper == max(upper), bin := paste(conditional_scientific(lower+1), "-", 
+                                         format(upper, digits = 3))]
+dtPlot
+```
+
+```{r bar_polygon_area}
+ggplot(dtPlot, aes(x=bin, y=counts)) + 
+  geom_bar(stat = "identity", fill = "#051399") + 
+  # `limits` sets the order, otherwise would be alphabetical
+  scale_x_discrete(limits = dtPlot$bin) + 
+  scale_y_continuous(labels = \(l) format(l, scientific = FALSE, big.mark=',')) + 
+  geom_text(aes(x=bin, y=counts, label = format(counts, big.mark = ',')), 
+          nudge_y = 100000, data = dtPlot[upper >= 1e+08]) + 
+  ylab("count") + 
+  xlab("Area Bins (m²)") + 
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none") + 
+  ggtitle("Polygon Area",
+          subtitle = paste("First week of October 2024. N =", format(area_count, big.mark=',')))
+```
+
+### Vertex Count
+
+Includes features of all types: points, lines, polygons, bounding boxes (converted to 5 vertex polygons) and circles (converted to 1 vertex points).
+
+As in the polygon area above, I did some experiments to find useful histogram breaks, and then wrote the breaks manually.
+
+```{r bar_vertex_count}
+vert_bins = c(1,1,2,3,4,5,20,100,200,1000,max(dtVert$vertex_count))
+vert_hist = hist(dtVert$vertex_count, breaks = vert_bins, plot = FALSE)
+dtPlot = as.data.table(list(lower = vert_hist$breaks[-length(vert_hist$breaks)], 
+                            upper = vert_hist$breaks[-1],
+                            counts = vert_hist$counts))
+dtPlot[, bin := paste(lower + 1, "-", upper)]
+dtPlot[1:5, bin := 1:5]
+
+ggplot(dtPlot, aes(x=bin, y=counts)) + 
+  geom_bar(stat = "identity", fill = "#781399") + 
+  # `limits` sets the order, otherwise would be alphabetical
+  scale_x_discrete(limits = dtPlot$bin) + 
+  scale_y_continuous(labels = \(l) format(l, scientific = FALSE, big.mark=',')) + 
+  ylab("count") + 
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1), 
+        legend.position="none", axis.title.x=element_blank()) + 
+  ggtitle("Vertex Count, by Feature", 
+          subtitle = paste("First week of October 2024. N =", format(dtVert[, .N], big.mark=',')))
+```
+
+However, the 5 vertex bin hides the variation seen in the other bins.   
+Below is a table view to better display the variation:
+```{r vertices_table}
+vert_polygon_hist = hist(dtVert[geo_type == "POLYGON", vertex_count], 
+                         breaks = vert_bins, plot = FALSE)
+vert_bbox_hist = hist(dtVert[geo_type == "BBOX", vertex_count], 
+                      breaks = vert_bins, plot = FALSE)
+dtPlot[, polygon_only := vert_polygon_hist$counts]
+dtPlot[, bbox_only := vert_bbox_hist$counts]
+dtPlot[, .(bin, count_all_geom_types = counts, 
+           count_polygon_only = polygon_only,
+           count_bbox_only = bbox_only)]
+```
+#### Explaining Vertex Counts
+
+In this analysis, bounding boxes are considered to have 5 vertices since they are converted to polygons in order to calculate their area. BBOXes represent more than 2/3 of the 5 vertex records.
+
+There are also BBOX type queries with 10 or 15 vertices. These are from when users submitted a list of two or three BBOXes, and are handled in this analysis as if they were multipolygon features for the purposes of area calculation.
+
+Polygons with three vertices are actually a line, if they are valid at all, since the last point is supposed to be the same as the first point. This is all user-submitted data, and is not guaranteed to be valid.
+
+## Session Info
+
+```{r session_info}
+sessionInfo()
+```
+
