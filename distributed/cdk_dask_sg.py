@@ -64,7 +64,7 @@ app = App()
 DaskSecurityGroupStack(
     app,
     "DaskSecurityGroupStack",
-    security_group_name="sg_dask",
+    security_group_name="bigstac-dask",
     vpc_id=vpc_id,
     env=Environment(account=account, region=region),
 )
