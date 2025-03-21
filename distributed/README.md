@@ -38,4 +38,10 @@ The Packer workflow needs to find the base NGAP-provided AMI, and that requires 
 
 ## Run Example Notebook
 
-`distributed_duckdb_example.ipynb` prepares a Dask cluster, then runs a DuckDB query. First it runs the query on the Dask cluster, leveraging data parallelism so that each of the two nodes has a different subset of the total data to query. Then it runs the same query on the Jupyter server, which is the same EC2 instance type as the Dask workers. For the test dataset with 17m rows, it is between 33% and 50% faster using the two node Dask cluser. For this test, the data is located on EFS (Amazon's NFS product).
+This notebook will need to be run on a separate Jupyter server running on EC2. We have an existing instance we've been using for testing named `bigstac-jupyter`. If you set up a new one, it will need Python 3.10 and the `jupyterlab` and the `duckdb` Python packages installed. Then you can start Jupyter and use SSM to forward port 8888 back to your machine to access the notebook.
+
+The notebook will need access to your AWS credentials. I recommend you get short-term keys for the CMR SIT account, then use the Jupyter server's terminal or a SSM session to add them to the Jupyter server's `~/.aws/credentials` file.
+
+The `distributed_duckdb_example.ipynb` notebook prepares a Dask cluster, then runs a DuckDB query.
+
+First, it runs the query on the Dask cluster, leveraging data parallelism so that each of the two nodes has a different subset of the total data to query. Next it runs the same query on the Jupyter server, which has the same EC2 instance type as the Dask workers. For the test dataset with 17m rows, it is between 33% and 50% faster using the two node Dask cluser. For this test, the data is located on EFS (Amazon's NFS product).
